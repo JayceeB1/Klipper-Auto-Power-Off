@@ -23,6 +23,20 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
 - Contrôle manuel avec des commandes GCODE
 - Fonctionne avec n'importe quel périphérique d'alimentation contrôlé par GPIO
 
+## Compatibilité des systèmes d'alimentation
+
+Ce module est conçu pour fonctionner avec divers systèmes de contrôle d'alimentation configurés dans Moonraker, notamment :
+
+- `gpio` - Contrôle GPIO direct
+- `tplink_smartplug` - Prises intelligentes TP-Link
+- `tasmota` - Appareils Tasmota
+- `shelly` - Appareils Shelly
+- `homeassistant` - Intégration Home Assistant
+- `mqtt` - Intégration MQTT
+- Autres périphériques d'alimentation Moonraker
+
+Le module détecte automatiquement la méthode appropriée pour contrôler votre périphérique d'alimentation, qu'il utilise `set_power()`, `turn_off()`, ou des commandes GCODE Moonraker standard.
+
 ## Prérequis
 
 - Klipper avec un [contrôle GPIO d'alimentation](https://www.klipper3d.org/Config_Reference.html#output_pin) correctement configuré

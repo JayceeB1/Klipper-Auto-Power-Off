@@ -3,6 +3,7 @@
 A Klipper module that automatically powers off your 3D printer after a completed print, once it has cooled down and remained idle for a specified period of time.
 
 ![Auto Power Off Panel](images/auto_power_off_panel.png)
+coming soon... ^^
 
 ## Support Development
 
@@ -28,6 +29,20 @@ Your support is greatly appreciated and helps keep this project maintained and i
 - Klipper with a properly configured [power GPIO control](https://www.klipper3d.org/Config_Reference.html#output_pin)
 - Fluidd or Mainsail (for UI integration)
 - A 3D printer with a power control setup
+
+## Power System Compatibility
+
+This module is designed to work with various power control systems configured in Moonraker, including:
+
+- `gpio` - Direct GPIO control
+- `tplink_smartplug` - TP-Link Smart Plugs
+- `tasmota` - Tasmota devices
+- `shelly` - Shelly devices
+- `homeassistant` - Home Assistant integration
+- `mqtt` - MQTT integration
+- Other Moonraker power devices
+
+The module automatically detects the appropriate method to control your power device, whether it uses `set_power()`, `turn_off()`, or standard Moonraker GCODE commands.
 
 ## Installation
 
