@@ -9,15 +9,16 @@ A Klipper module that automatically powers off your 3D printer after a completed
 - Automatically shut down your printer after completed prints
 - Configurable idle timeout (default: 10 minutes)
 - Configurable temperature threshold (default: 40°C)
-- Integration with Fluidd for easy control via UI
+- Integration with both Fluidd and Mainsail for easy control via UI
 - Status monitoring for hotend and bed temperatures
 - Manual control with GCODE commands
 - Works with any GPIO-controlled power device
+- Available in English and French
 
 ## Requirements
 
 - Klipper with a properly configured [power GPIO control](https://www.klipper3d.org/Config_Reference.html#output_pin)
-- Fluidd (for UI integration)
+- Fluidd or Mainsail (for UI integration)
 - A 3D printer with a power control setup
 
 ## Installation
@@ -26,17 +27,25 @@ A Klipper module that automatically powers off your 3D printer after a completed
 
 1. Download the installation script:
    ```bash
-   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/install_auto_power_off.sh
+   # English version
+   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off.sh
+   
+   # French version
+   wget -O install_auto_power_off_fr.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off_fr.sh
    ```
 
 2. Make it executable:
    ```bash
    chmod +x install_auto_power_off.sh
+   # or
+   chmod +x install_auto_power_off_fr.sh
    ```
 
 3. Run the script:
    ```bash
    ./install_auto_power_off.sh
+   # or
+   ./install_auto_power_off_fr.sh
    ```
 
 4. Follow the on-screen instructions.
@@ -45,13 +54,29 @@ A Klipper module that automatically powers off your 3D printer after a completed
 
 1. Copy the `auto_power_off.py` script to your Klipper extras directory:
    ```bash
-   cp auto_power_off.py ~/klipper/klippy/extras/
+   cp src/auto_power_off.py ~/klipper/klippy/extras/
    ```
 
-2. Copy the Fluidd panel file:
+2. Copy the UI panel files based on your interface:
+   
+   **For Fluidd:**
    ```bash
    mkdir -p ~/printer_data/config/fluidd/
-   cp auto_power_off.cfg ~/printer_data/config/fluidd/
+   # English version
+   cp ui/fluidd/auto_power_off.cfg ~/printer_data/config/fluidd/
+   # French version
+   cp ui/fluidd/auto_power_off_fr.cfg ~/printer_data/config/fluidd/auto_power_off.cfg
+   ```
+   
+   **For Mainsail:**
+   ```bash
+   mkdir -p ~/printer_data/config/mainsail/
+   # English version
+   cp ui/mainsail/auto_power_off.cfg ~/printer_data/config/mainsail/
+   cp ui/mainsail/auto_power_off_panel.cfg ~/printer_data/config/mainsail/
+   # French version
+   cp ui/mainsail/auto_power_off_fr.cfg ~/printer_data/config/mainsail/
+   cp ui/mainsail/auto_power_off_panel_fr.cfg ~/printer_data/config/mainsail/
    ```
 
 3. Add the following to your `printer.cfg` file:
@@ -62,7 +87,11 @@ A Klipper module that automatically powers off your 3D printer after a completed
    power_device: psu_control  # Name of your power device (must match the [power] section)
    auto_poweroff_enabled: True  # Enable auto power off by default at startup
 
-   [include fluidd/auto_power_off.cfg]  # Include Fluidd panel (comment if you don't use Fluidd)
+   # For Fluidd:
+   [include fluidd/auto_power_off.cfg]
+   
+   # For Mainsail:
+   [include mainsail/auto_power_off.cfg]
    ```
 
 4. Restart Klipper:
@@ -90,6 +119,13 @@ Once installed, you'll see an "Auto Power Off" panel in your Fluidd interface th
 - See the countdown timer and current temperatures
 - Manually start/cancel the power off timer
 - Immediately power off the printer (with confirmation)
+
+### Mainsail Interface
+
+For Mainsail, you'll have access to:
+- A set of GCODE commands to control auto power off
+- A menu in the interface to access power off functions
+- Configurable buttons to control the function (if you set up the GPIOs)
 
 ### GCODE Commands
 
@@ -132,6 +168,12 @@ If you encounter any issues:
 
 4. Make sure your configuration matches your printer's power setup.
 
+## Language Support
+
+This module is available in:
+- English (default)
+- French (see [README_FR.md](README_FR.md))
+
 ## License
 
 This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) file for details.
@@ -139,4 +181,4 @@ This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) 
 ## Acknowledgements
 
 - Inspired by OctoPrint's PSU Control plugin
-- Thanks to the Klipper and Fluidd development teams
+- Thanks to the Klipper, Fluidd, and Mainsail development teams

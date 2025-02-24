@@ -26,17 +26,25 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 
 1. Téléchargez le script d'installation :
    ```bash
-   wget -O install_auto_power_off_fr.sh https://raw.githubusercontent.com/yourusername/klipper-auto-power-off/main/install_auto_power_off_fr.sh
+   # Version française
+   wget -O install_auto_power_off_fr.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off_fr.sh
+   
+   # Version anglaise
+   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off.sh
    ```
 
 2. Rendez-le exécutable :
    ```bash
    chmod +x install_auto_power_off_fr.sh
+   # ou
+   chmod +x install_auto_power_off.sh
    ```
 
 3. Exécutez le script :
    ```bash
    ./install_auto_power_off_fr.sh
+   # ou
+   ./install_auto_power_off.sh
    ```
 
 4. Suivez les instructions à l'écran.
@@ -45,19 +53,29 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 
 1. Copiez le script `auto_power_off.py` dans votre répertoire d'extras Klipper :
    ```bash
-   cp auto_power_off.py ~/klipper/klippy/extras/
+   cp src/auto_power_off.py ~/klipper/klippy/extras/
    ```
 
 2. Copiez le fichier du panneau Fluidd ou Mainsail :
+   
+   **Pour Fluidd :**
    ```bash
    mkdir -p ~/printer_data/config/fluidd/
-   cp auto_power_off.cfg ~/printer_data/config/fluidd/
+   # Version française
+   cp ui/fluidd/auto_power_off_fr.cfg ~/printer_data/config/fluidd/auto_power_off.cfg
+   # Version anglaise
+   cp ui/fluidd/auto_power_off.cfg ~/printer_data/config/fluidd/
    ```
-   ou pour Mainsail :
+   
+   **Pour Mainsail :**
    ```bash
    mkdir -p ~/printer_data/config/mainsail/
-   cp auto_power_off.cfg ~/printer_data/config/mainsail/
-   cp auto_power_off_panel.cfg ~/printer_data/config/mainsail/
+   # Version française
+   cp ui/mainsail/auto_power_off_fr.cfg ~/printer_data/config/mainsail/
+   cp ui/mainsail/auto_power_off_panel_fr.cfg ~/printer_data/config/mainsail/
+   # Version anglaise
+   cp ui/mainsail/auto_power_off.cfg ~/printer_data/config/mainsail/
+   cp ui/mainsail/auto_power_off_panel.cfg ~/printer_data/config/mainsail/
    ```
 
 3. Ajoutez ce qui suit à votre fichier `printer.cfg` :
@@ -68,11 +86,11 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
    power_device: psu_control  # Nom de votre périphérique d'alimentation (doit correspondre à la section [power])
    auto_poweroff_enabled: True  # Active l'extinction automatique par défaut au démarrage
 
-   [include fluidd/auto_power_off.cfg]  # Inclusion du panneau Fluidd (commenter si vous n'utilisez pas Fluidd)
-   ```
-   ou pour Mainsail :
-   ```
-   [include mainsail/auto_power_off.cfg]  # Inclusion du panneau Mainsail (commenter si vous n'utilisez pas Mainsail)
+   # Pour Fluidd :
+   [include fluidd/auto_power_off.cfg]
+   
+   # Pour Mainsail :
+   [include mainsail/auto_power_off.cfg]
    ```
 
 4. Redémarrez Klipper :
@@ -148,6 +166,12 @@ Si vous rencontrez des problèmes :
    ```
 
 4. Assurez-vous que votre configuration correspond à la configuration d'alimentation de votre imprimante.
+
+## Support linguistique
+
+Ce module est disponible en :
+- Français (ce document)
+- Anglais (voir [README.md](README.md))
 
 ## Licence
 
