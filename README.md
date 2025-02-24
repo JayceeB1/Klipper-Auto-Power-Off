@@ -26,7 +26,7 @@ A Klipper module that automatically powers off your 3D printer after a completed
 
 1. Download the installation script:
    ```bash
-   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/yourusername/klipper-auto-power-off/main/install_auto_power_off.sh
+   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/install_auto_power_off.sh
    ```
 
 2. Make it executable:
