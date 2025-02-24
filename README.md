@@ -4,6 +4,14 @@ A Klipper module that automatically powers off your 3D printer after a completed
 
 ![Auto Power Off Panel](images/auto_power_off_panel.png)
 
+## Support Development
+
+If you find this module useful, consider buying me a coffee to support further development!
+
+[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jayceeb1)
+
+Your support is greatly appreciated and helps keep this project maintained and improved!
+
 ## Features
 
 - Automatically shut down your printer after completed prints

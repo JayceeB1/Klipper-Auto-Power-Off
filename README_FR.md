@@ -4,6 +4,15 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 
 ![Panneau Auto Power Off](images/auto_power_off_panel.png)
 
+## Soutenir le développement
+
+Si vous trouvez ce module utile, vous pouvez m'offrir un café pour soutenir son développement !
+
+[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jayceeb1)
+
+Votre soutien est grandement apprécié et aide à maintenir et améliorer ce projet !
+
+
 ## Fonctionnalités
 
 - Extinction automatique de votre imprimante après les impressions terminées
