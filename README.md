@@ -118,6 +118,7 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `temp_threshold` | 40 | Temperature in °C below which it's safe to power off |
 | `power_device` | psu_control | Name of your power device (must match the [power] section) |
 | `auto_poweroff_enabled` | False | Enable auto power off by default at startup |
+| `language` | auto | Language for messages: 'en' for English, 'fr' for French, 'auto' for auto-detection |
 | `moonraker_integration` | False | Enable integration with Moonraker's power control (optional) |
 | `moonraker_url` | http://localhost:7125 | URL for Moonraker API (optional) |
 
@@ -148,6 +149,8 @@ The following GCODE commands are available:
 - `AUTO_POWEROFF CANCEL` - Cancel the current timer
 - `AUTO_POWEROFF NOW` - Immediately power off the printer
 - `AUTO_POWEROFF STATUS` - Display detailed status
+- `AUTO_POWEROFF LANGUAGE VALUE=en` - Set language to English
+- `AUTO_POWEROFF LANGUAGE VALUE=fr` - Set language to French
 
 ### End G-code Integration
 
@@ -219,6 +222,15 @@ This integration works with all device types supported by Moonraker, including:
 - And several other options...
 
 See the [Moonraker documentation](https://moonraker.readthedocs.io/en/latest/configuration/#power) for the complete list of options.
+
+### Adding New Languages
+
+The module now supports translations via external language files. To add a new language:
+
+1. Create a new JSON file in the `auto_power_off_langs` directory named after the language code (e.g., `de.json` for German)
+2. Copy the structure from an existing language file and translate all the messages
+3. Add the new language code to the validation list in the `_configure_language` method
+4. The new language will be available using `language: de` in configuration or via GCODE command
 
 ## Troubleshooting
 
