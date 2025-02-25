@@ -4,15 +4,6 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 
 ![Panneau Auto Power Off](images/auto_power_off_panel.png)
 
-## Soutenir le développement
-
-Si vous trouvez ce module utile, vous pouvez m'offrir un café pour soutenir son développement !
-
-[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jayceeb1)
-
-Votre soutien est grandement apprécié et aide à maintenir et améliorer ce projet !
-
-
 ## Fonctionnalités
 
 - Extinction automatique de votre imprimante après les impressions terminées
@@ -22,26 +13,22 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
 - Surveillance de l'état des températures de la buse et du lit
 - Contrôle manuel avec des commandes GCODE
 - Fonctionne avec n'importe quel périphérique d'alimentation contrôlé par GPIO
-
-## Compatibilité des systèmes d'alimentation
-
-Ce module est conçu pour fonctionner avec divers systèmes de contrôle d'alimentation configurés dans Moonraker, notamment :
-
-- `gpio` - Contrôle GPIO direct
-- `tplink_smartplug` - Prises intelligentes TP-Link
-- `tasmota` - Appareils Tasmota
-- `shelly` - Appareils Shelly
-- `homeassistant` - Intégration Home Assistant
-- `mqtt` - Intégration MQTT
-- Autres périphériques d'alimentation Moonraker
-
-Le module détecte automatiquement la méthode appropriée pour contrôler votre périphérique d'alimentation, qu'il utilise `set_power()`, `turn_off()`, ou des commandes GCODE Moonraker standard.
+- Compatible avec tous les types de dispositifs d'alimentation Moonraker (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
 
 ## Prérequis
 
 - Klipper avec un [contrôle GPIO d'alimentation](https://www.klipper3d.org/Config_Reference.html#output_pin) correctement configuré
 - Fluidd ou Mainsail (pour l'intégration de l'interface utilisateur)
 - Une imprimante 3D avec une configuration de contrôle d'alimentation
+
+## Soutenir le développement
+
+Si vous trouvez ce module utile, vous pouvez m'offrir un café pour soutenir son développement !
+
+[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/jayceeB1)
+
+Votre soutien est grandement apprécié et aide à maintenir et améliorer ce projet !
+
 
 ## Installation
 
@@ -131,6 +118,8 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | `temp_threshold` | 40 | Température en °C en dessous de laquelle il est sûr d'éteindre |
 | `power_device` | psu_control | Nom de votre périphérique d'alimentation (doit correspondre à la section [power]) |
 | `auto_poweroff_enabled` | False | Active l'extinction automatique par défaut au démarrage |
+| `moonraker_integration` | False | Active l'intégration avec le contrôle d'alimentation de Moonraker (optionnel) |
+| `moonraker_url` | http://localhost:7125 | URL pour l'API Moonraker (optionnel) |
 
 ## Utilisation
 
@@ -169,6 +158,68 @@ AUTO_POWEROFF ON  ; Active l'extinction automatique
 AUTO_POWEROFF START  ; Démarre le compte à rebours
 ```
 
+## Intégration avec Moonraker (Avancé)
+
+Auto Power Off peut fonctionner en tandem avec le module Power de Moonraker pour offrir un contrôle d'alimentation complet :
+
+- **Auto Power Off** gère l'extinction basée sur la température et le délai d'inactivité après une impression
+- **Moonraker Power** peut gérer l'allumage avant l'impression et prendre en charge différents types de dispositifs d'alimentation
+
+Cette intégration vous permet de :
+- Utiliser les broches GPIO du SBC ou différents types de prises intelligentes
+- Allumer automatiquement l'imprimante lorsqu'une impression est lancée
+- Redémarrer automatiquement Klipper après la mise sous tension
+- Maintenir la protection contre l'extinction pendant l'impression
+
+### Configuration
+
+1. **Configurez le module Power dans `moonraker.conf`**:
+
+   ```ini
+   [power printer]
+   type: gpio                     # Type de dispositif: gpio, tplink_smartplug, tasmota, etc.
+   pin: gpio27                    # Pour GPIO uniquement: broche à utiliser
+   # address: 192.168.1.123       # Pour les appareils réseau: adresse IP
+   off_when_shutdown: True
+   initial_state: off
+   on_when_job_queued: True       # Allumer quand une impression est lancée
+   off_when_job_complete: False   # Laisser Auto Power Off gérer l'extinction
+   locked_while_printing: True
+   restart_klipper_when_powered: True
+   restart_delay: 3
+   ```
+
+2. **Activez l'intégration dans `printer.cfg`**:
+
+   ```ini
+   [auto_power_off]
+   idle_timeout: 600              # Temps d'inactivité en secondes
+   temp_threshold: 40             # Seuil de température en °C
+   power_device: printer          # Doit correspondre au nom dans [power printer]
+   moonraker_integration: True    # Activer l'intégration Moonraker
+   moonraker_url: http://localhost:7125  # URL de l'API Moonraker (optionnel)
+   ```
+
+### Comportement attendu
+
+1. Quand une impression est mise en file d'attente, Moonraker allume l'imprimante.
+2. Klipper redémarre automatiquement après la mise sous tension.
+3. L'imprimante ne peut pas être éteinte pendant l'impression (verrouillée).
+4. Quand l'impression est terminée, Auto Power Off surveille:
+   - Le délai d'inactivité configuré
+   - Les températures de l'extrudeur et du lit
+5. Une fois les conditions remplies, Auto Power Off éteint l'imprimante.
+
+### Types de dispositifs pris en charge
+
+Cette intégration fonctionne avec tous les types de dispositifs supportés par Moonraker, notamment:
+- Broches GPIO des Raspberry Pi et autres SBC
+- Prises intelligentes TP-Link
+- Dispositifs Tasmota, Shelly, HomeSeer
+- Et plusieurs autres options...
+
+Consultez la [documentation de Moonraker](https://moonraker.readthedocs.io/en/latest/configuration/#power) pour la liste complète des options.
+
 ## Dépannage
 
 Si vous rencontrez des problèmes :
@@ -195,6 +246,7 @@ Si vous rencontrez des problèmes :
 Ce module est disponible en :
 - Français (ce document)
 - Anglais (voir [README.md](README.md))
+
 
 ## Licence
 

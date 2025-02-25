@@ -3,15 +3,6 @@
 A Klipper module that automatically powers off your 3D printer after a completed print, once it has cooled down and remained idle for a specified period of time.
 
 ![Auto Power Off Panel](images/auto_power_off_panel.png)
-coming soon... ^^
-
-## Support Development
-
-If you find this module useful, consider buying me a coffee to support further development!
-
-[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jayceeb1)
-
-Your support is greatly appreciated and helps keep this project maintained and improved!
 
 ## Features
 
@@ -23,6 +14,7 @@ Your support is greatly appreciated and helps keep this project maintained and i
 - Manual control with GCODE commands
 - Works with any GPIO-controlled power device
 - Available in English and French
+- Compatible with all Moonraker power device types (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
 
 ## Requirements
 
@@ -30,19 +22,13 @@ Your support is greatly appreciated and helps keep this project maintained and i
 - Fluidd or Mainsail (for UI integration)
 - A 3D printer with a power control setup
 
-## Power System Compatibility
+## Support Development
 
-This module is designed to work with various power control systems configured in Moonraker, including:
+If you find this module useful, consider buying me a coffee to support further development!
 
-- `gpio` - Direct GPIO control
-- `tplink_smartplug` - TP-Link Smart Plugs
-- `tasmota` - Tasmota devices
-- `shelly` - Shelly devices
-- `homeassistant` - Home Assistant integration
-- `mqtt` - MQTT integration
-- Other Moonraker power devices
+[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/jayceeB1)
 
-The module automatically detects the appropriate method to control your power device, whether it uses `set_power()`, `turn_off()`, or standard Moonraker GCODE commands.
+Your support is greatly appreciated and helps keep this project maintained and improved!
 
 ## Installation
 
@@ -132,6 +118,8 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `temp_threshold` | 40 | Temperature in °C below which it's safe to power off |
 | `power_device` | psu_control | Name of your power device (must match the [power] section) |
 | `auto_poweroff_enabled` | False | Enable auto power off by default at startup |
+| `moonraker_integration` | False | Enable integration with Moonraker's power control (optional) |
+| `moonraker_url` | http://localhost:7125 | URL for Moonraker API (optional) |
 
 ## Usage
 
@@ -169,6 +157,68 @@ To enable auto power off only for specific prints, add this to your slicer's end
 AUTO_POWEROFF ON  ; Enable auto power off
 AUTO_POWEROFF START  ; Start the countdown timer
 ```
+
+## Moonraker Integration (Advanced)
+
+Auto Power Off can work in tandem with Moonraker's Power module to offer complete power control:
+
+- **Auto Power Off** handles temperature-based and idle-timeout power off after a print
+- **Moonraker Power** can handle power on before printing and support different power device types
+
+This integration allows you to:
+- Use SBC GPIO pins or different smart plug types
+- Automatically power on the printer when a print is queued
+- Automatically restart Klipper after power on
+- Maintain protection against power off during printing
+
+### Configuration
+
+1. **Configure the Power module in `moonraker.conf`**:
+
+   ```ini
+   [power printer]
+   type: gpio                     # Device type: gpio, tplink_smartplug, tasmota, etc.
+   pin: gpio27                    # For GPIO only: pin to use
+   # address: 192.168.1.123       # For network devices: IP address
+   off_when_shutdown: True
+   initial_state: off
+   on_when_job_queued: True       # Power on when a print is queued
+   off_when_job_complete: False   # Let Auto Power Off handle power off
+   locked_while_printing: True
+   restart_klipper_when_powered: True
+   restart_delay: 3
+   ```
+
+2. **Enable integration in `printer.cfg`**:
+
+   ```ini
+   [auto_power_off]
+   idle_timeout: 600              # Idle time in seconds
+   temp_threshold: 40             # Temperature threshold in °C
+   power_device: printer          # Must match name in [power printer]
+   moonraker_integration: True    # Enable Moonraker integration
+   moonraker_url: http://localhost:7125  # Moonraker API URL (optional)
+   ```
+
+### Expected Behavior
+
+1. When a print is queued, Moonraker powers on the printer.
+2. Klipper automatically restarts after power on.
+3. The printer cannot be powered off during printing (locked).
+4. When the print is complete, Auto Power Off monitors:
+   - The configured idle timeout
+   - Hotend and bed temperatures
+5. Once conditions are met, Auto Power Off powers off the printer.
+
+### Supported Device Types
+
+This integration works with all device types supported by Moonraker, including:
+- GPIO pins on Raspberry Pi and other SBCs
+- TP-Link Smart Plugs
+- Tasmota, Shelly, HomeSeer devices
+- And several other options...
+
+See the [Moonraker documentation](https://moonraker.readthedocs.io/en/latest/configuration/#power) for the complete list of options.
 
 ## Troubleshooting
 

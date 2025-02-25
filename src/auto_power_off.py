@@ -144,38 +144,77 @@ class AutoPowerOff:
             self.logger.info("Conditions met, powering off the printer")
         
         try:
-            # Access the power controller / Accéder au contrôleur d'alimentation
+            # Check if we should use Moonraker's API
+            moonraker_enabled = self.printer.get_start_args().get('moonraker_integration', False)
+            moonraker_url = self.printer.get_start_args().get('moonraker_url', "http://localhost:7125")
+            
+            if moonraker_enabled:
+                # Use Moonraker API to power off
+                import requests
+                
+                # First, check if device exists
+                power_status_url = f"{moonraker_url}/printer/objects/query?power_devices={self.power_device}"
+                try:
+                    status_resp = requests.get(power_status_url)
+                    if status_resp.status_code == 200:
+                        # Device exists, send power off command
+                        power_off_url = f"{moonraker_url}/printer/objects/command?command=power_device_off&device={self.power_device}"
+                        off_resp = requests.post(power_off_url)
+                        
+                        if off_resp.status_code == 200:
+                            if self.lang == 'fr':
+                                self.logger.info(f"Imprimante éteinte avec succès via Moonraker API")
+                            else:
+                                self.logger.info(f"Printer powered off successfully via Moonraker API")
+                        else:
+                            raise Exception(f"Moonraker API returned error: {off_resp.status_code}")
+                    else:
+                        raise Exception(f"Power device '{self.power_device}' not found in Moonraker")
+                except Exception as e:
+                    # Fall back to direct Klipper method if Moonraker API fails
+                    self.logger.warning(f"Error using Moonraker API: {str(e)}. Falling back to Klipper method.")
+                    self._use_klipper_power_control()
+            else:
+                # Use direct Klipper control
+                self._use_klipper_power_control()
+                    
+        except Exception as e:
+            if self.lang == 'fr':
+                self.logger.error(f"Erreur lors de l'extinction: {str(e)}")
+            else:
+                self.logger.error(f"Error during power off: {str(e)}")
+
+    def _use_klipper_power_control(self):
+        """Use Klipper's direct power control methods"""
+        try:
+            # Access the power controller
             power_device = self.printer.lookup_object('power ' + self.power_device)
             
-            # Try to use the standard method / Essayer d'utiliser la méthode standard
+            # Try to use the standard method
             if hasattr(power_device, 'set_power'):
                 power_device.set_power(0)
                 if self.lang == 'fr':
                     self.logger.info("Imprimante éteinte avec succès (méthode set_power)")
                 else:
                     self.logger.info("Printer powered off successfully (set_power method)")
-            # Alternative for other device types / Alternative pour d'autres types de périphériques
+            # Alternative for other device types
             elif hasattr(power_device, 'turn_off'):
                 power_device.turn_off()
                 if self.lang == 'fr':
                     self.logger.info("Imprimante éteinte avec succès (méthode turn_off)")
                 else:
                     self.logger.info("Printer powered off successfully (turn_off method)")
-            # Try with standard Moonraker API call / Essayer avec un appel API standard Moonraker
+            # Try with standard GCODE command
             else:
-                # Use a generic command via GCODE / Utiliser une commande générique via GCODE
                 gcode = self.printer.lookup_object('gcode')
                 gcode.run_script_from_command(f"POWER_OFF {self.power_device}")
                 if self.lang == 'fr':
                     self.logger.info("Imprimante éteinte avec succès (via GCODE)")
                 else:
                     self.logger.info("Printer powered off successfully (via GCODE)")
-                
         except Exception as e:
-            if self.lang == 'fr':
-                self.logger.error(f"Erreur lors de l'extinction: {str(e)}")
-            else:
-                self.logger.error(f"Error during power off: {str(e)}")
+            raise e  # Re-raise the exception for the main error handler
+
     
     def _update_temps(self, eventtime):
         """Update temperatures for status API / Met à jour les températures pour l'API de status"""
