@@ -223,14 +223,6 @@ This integration works with all device types supported by Moonraker, including:
 
 See the [Moonraker documentation](https://moonraker.readthedocs.io/en/latest/configuration/#power) for the complete list of options.
 
-### Adding New Languages
-
-The module now supports translations via external language files. To add a new language:
-
-1. Create a new JSON file in the `auto_power_off_langs` directory named after the language code (e.g., `de.json` for German)
-2. Copy the structure from an existing language file and translate all the messages
-3. Add the new language code to the validation list in the `_configure_language` method
-4. The new language will be available using `language: de` in configuration or via GCODE command
 
 ## Troubleshooting
 
@@ -258,6 +250,15 @@ If you encounter any issues:
 This module is available in:
 - English (default)
 - French (see [README_FR.md](README_FR.md))
+
+### Adding New Languages
+
+The module now supports translations via external language files. To add a new language:
+
+1. Create a new JSON file in the `auto_power_off_langs` directory named after the language code (e.g., `de.json` for German)
+2. Copy the structure from an existing language file and translate all the messages
+3. Add the new language code to the validation list in the `_configure_language` method
+4. The new language will be available using `language: de` in configuration or via GCODE command
 
 ## License
 

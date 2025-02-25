@@ -223,16 +223,6 @@ Cette intégration fonctionne avec tous les types de dispositifs supportés par 
 
 Consultez la [documentation de Moonraker](https://moonraker.readthedocs.io/en/latest/configuration/#power) pour la liste complète des options.
 
-### Ajouter de nouvelles langues
-
-Le module prend désormais en charge les traductions via des fichiers de langue externes. Pour ajouter une nouvelle langue :
-
-1. Créez un nouveau fichier JSON dans le répertoire `auto_power_off_langs` nommé d'après le code de langue (par exemple, `de.json` pour l'allemand)
-2. Copiez la structure d'un fichier de langue existant et traduisez tous les messages
-3. Ajoutez le nouveau code de langue à la liste de validation dans la méthode `_configure_language`
-4. La nouvelle langue sera disponible en utilisant `language: de` dans la configuration ou via une commande GCODE
-
-
 ## Dépannage
 
 Si vous rencontrez des problèmes :
@@ -259,6 +249,15 @@ Si vous rencontrez des problèmes :
 Ce module est disponible en :
 - Français (ce document)
 - Anglais (voir [README.md](README.md))
+
+### Ajouter de nouvelles langues
+
+Le module prend désormais en charge les traductions via des fichiers de langue externes. Pour ajouter une nouvelle langue :
+
+1. Créez un nouveau fichier JSON dans le répertoire `auto_power_off_langs` nommé d'après le code de langue (par exemple, `de.json` pour l'allemand)
+2. Copiez la structure d'un fichier de langue existant et traduisez tous les messages
+3. Ajoutez le nouveau code de langue à la liste de validation dans la méthode `_configure_language`
+4. La nouvelle langue sera disponible en utilisant `language: de` dans la configuration ou via une commande GCODE
 
 
 ## Licence
