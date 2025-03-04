@@ -27,5 +27,14 @@
     "disabled_status": "désactivée",
     "timer_active": "actif",
     "timer_inactive": "inactif",
-    "option_not_recognized": "Option non reconnue. Utilisez ON, OFF, START, CANCEL, NOW, STATUS ou LANGUAGE"
-  }
+    "option_not_recognized": "Option non reconnue. Utilisez ON, OFF, START, CANCEL, NOW, STATUS ou LANGUAGE",
+    "error_moonraker_all_retries_failed": "Échec de l'extinction après {retries} tentatives via l'API Moonraker. Dernière erreur : {error}",
+    "falling_back_to_direct": "Repli sur la méthode de contrôle d'alimentation directe de Klipper",
+    "power_device_not_found": "Périphérique d'alimentation '{device}' non trouvé dans Moonraker. Vérifiez votre configuration.",
+    "power_off_success": "Imprimante éteinte avec succès",
+    "power_off_failed": "Échec de l'extinction de l'imprimante : {error}",
+    "moonraker_retries_failed": "Impossible d'éteindre via Moonraker après plusieurs tentatives. Essai de la méthode directe.",
+    "diagnostic_mode_enabled": "Mode diagnostic activé. Journalisation détaillée activée.",
+    "diagnostic_mode_disabled": "Mode diagnostic désactivé.",
+    "power_off_direct_attempt": "Tentative de méthode d'extinction directe"
+}

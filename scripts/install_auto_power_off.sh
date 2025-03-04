@@ -1,6 +1,10 @@
 #!/bin/bash
-# Global installation script for Klipper Auto Power Off module
+# Unified installation script for Klipper Auto Power Off module
 # Usage: bash install_auto_power_off.sh
+
+# Set default language to English
+DEFAULT_LANG="en"
+LANG_CHOICE="$DEFAULT_LANG"
 
 # Colors for messages
 GREEN='\033[0;32m'
@@ -9,40 +13,204 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Function to display formatted messages
+# Repository information
+REPO_URL="https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main"
+
+# Function to display formatted messages in the selected language
 print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        echo -e "${BLUE}[INFO]${NC} $1"
+    else
+        echo -e "${BLUE}[INFO]${NC} $1"
+    fi
 }
 
 print_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        echo -e "${GREEN}[OK]${NC} $1"
+    else
+        echo -e "${GREEN}[OK]${NC} $1"
+    fi
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        echo -e "${YELLOW}[ATTENTION]${NC} $1"
+    else
+        echo -e "${YELLOW}[WARNING]${NC} $1"
+    fi
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        echo -e "${RED}[ERREUR]${NC} $1"
+    else
+        echo -e "${RED}[ERROR]${NC} $1"
+    fi
 }
+
+# Check script arguments for language preference
+for arg in "$@"; do
+    case $arg in
+        --fr|--french|-fr|-f)
+            LANG_CHOICE="fr"
+            shift
+            ;;
+        --en|--english|-en|-e)
+            LANG_CHOICE="en"
+            shift
+            ;;
+    esac
+done
+
+# Display language options if no argument was provided
+if [ "$LANG_CHOICE" = "$DEFAULT_LANG" ] && [ $# -eq 0 ]; then
+    echo "Select language / Choisir la langue:"
+    echo "1) English"
+    echo "2) Français"
+    read -p "Choice/Choix [1-2, default=1]: " lang_num
+    
+    if [ "$lang_num" = "2" ]; then
+        LANG_CHOICE="fr"
+    fi
+fi
+
+# Set language-specific messages
+if [ "$LANG_CHOICE" = "fr" ]; then
+    MSG_ROOT_ERROR="Ne pas exécuter ce script en tant que root (sudo). Utilisez votre utilisateur normal."
+    MSG_KLIPPER_ERROR="Le répertoire Klipper n'a pas été trouvé dans votre répertoire home."
+    MSG_KLIPPER_INSTALL="Assurez-vous que Klipper est installé avant d'exécuter ce script."
+    MSG_CHECK_DIRS="Vérification des répertoires nécessaires..."
+    MSG_EXTRAS_CHECKED="Répertoire des extras vérifié."
+    MSG_CONFIG_NOT_FOUND="Impossible de trouver automatiquement le répertoire de configuration."
+    MSG_ENTER_PATH="Veuillez entrer le chemin complet vers votre répertoire de configuration Klipper:"
+    MSG_DIR_NOT_EXISTS="Le répertoire n'existe pas. Installation annulée."
+    MSG_CONFIG_FOUND="Répertoire de configuration trouvé:"
+    MSG_UI_CHOICE="Quelle interface utilisez-vous? (1 = Fluidd, 2 = Mainsail, 3 = Les deux)"
+    MSG_SETUP_FLUIDD="Configuration pour Fluidd (par défaut)..."
+    MSG_SETUP_MAINSAIL="Configuration pour Mainsail..."
+    MSG_SETUP_BOTH="Configuration pour Fluidd et Mainsail..."
+    MSG_UI_DIRS_CREATED="Répertoires de l'interface utilisateur créés."
+    MSG_DL_MODULE="Téléchargement du module Python auto_power_off.py..."
+    MSG_MODULE_DOWNLOADED="Module Python téléchargé."
+    MSG_CREATING_LANG_DIRS="Création des répertoires de langue..."
+    MSG_LANG_DIRS_CREATED="Répertoires de langue créés."
+    MSG_DL_EN_TRANS="Téléchargement des traductions anglaises..."
+    MSG_EN_TRANS_DOWNLOADED="Traductions anglaises téléchargées."
+    MSG_DL_FR_TRANS="Téléchargement des traductions françaises..."
+    MSG_FR_TRANS_DOWNLOADED="Traductions françaises téléchargées."
+    MSG_CREATE_FLUIDD="Création du panneau Fluidd..."
+    MSG_FLUIDD_CREATED="Panneau Fluidd créé."
+    MSG_CREATE_MAINSAIL="Création du panneau Mainsail..."
+    MSG_MAINSAIL_CREATED="Panneau Mainsail créé."
+    MSG_MODIFY_CFG="Modification du fichier printer.cfg..."
+    MSG_CFG_NOT_FOUND="Fichier printer.cfg non trouvé à l'emplacement:"
+    MSG_MANUAL_ADD="Vous devrez ajouter manuellement la configuration à votre fichier printer.cfg."
+    MSG_AUTO_ADD_CFG="Voulez-vous ajouter automatiquement la configuration au fichier printer.cfg? [o/N]"
+    MSG_SECTION_EXISTS="La section [auto_power_off] existe déjà dans printer.cfg."
+    MSG_CHECK_UPDATE="Veuillez vérifier et mettre à jour la configuration manuellement."
+    MSG_CFG_ADDED="Configuration ajoutée au fichier printer.cfg."
+    MSG_CFG_NOT_ADDED="Configuration non ajoutée. Vous devrez l'ajouter manuellement."
+    MSG_RESTART_KLIPPER="Voulez-vous redémarrer Klipper maintenant pour appliquer les changements? [o/N]"
+    MSG_RESTARTING="Redémarrage de Klipper..."
+    MSG_RESTARTED="Klipper redémarré."
+    MSG_WAIT_RESTART="Patientez quelques secondes pour que Klipper redémarre complètement..."
+    MSG_LOADED_SUCCESS="Le module Auto Power Off a été chargé avec succès!"
+    MSG_VERIFY_FAILED="Vérification du chargement du module impossible. Veuillez vérifier les logs de Klipper."
+    MSG_NOT_RESTARTED="Klipper n'a pas été redémarré. Veuillez le redémarrer manuellement pour appliquer les changements."
+    MSG_RESTART_CMD="Commande pour redémarrer: sudo systemctl restart klipper"
+    MSG_INSTALL_COMPLETE="Installation terminée !"
+    MSG_HOW_TO_USE="=== Comment utiliser ===="
+    MSG_PANEL_AVAILABLE="1. Le panneau Auto Power Off sera disponible dans l'interface Fluidd/Mainsail"
+    MSG_AUTO_ACTIVATE="2. Le module s'activera automatiquement à la fin de chaque impression si configuré ainsi"
+    MSG_AVAILABLE_CMDS="3. Commandes GCODE disponibles:"
+    MSG_CMD_ON="   - AUTO_POWEROFF ON    - Active globalement la fonction"
+    MSG_CMD_OFF="   - AUTO_POWEROFF OFF   - Désactive globalement la fonction"
+    MSG_CMD_START="   - AUTO_POWEROFF START - Démarre manuellement le minuteur"
+    MSG_CMD_CANCEL="   - AUTO_POWEROFF CANCEL - Annule le minuteur en cours"
+    MSG_CMD_NOW="   - AUTO_POWEROFF NOW   - Éteint immédiatement l'imprimante"
+    MSG_CMD_STATUS="   - AUTO_POWEROFF STATUS - Affiche l'état détaillé"
+    MSG_CMD_DIAGNOSTIC="   - AUTO_POWEROFF DIAGNOSTIC VALUE=1 - Active le mode diagnostic (0 pour désactiver)"
+    MSG_CHECK_LOGS="Si vous rencontrez des problèmes, vérifiez les logs de Klipper avec: tail -f /tmp/klippy.log"
+    MSG_YES_CONFIRM="o"
+else
+    # English messages
+    MSG_ROOT_ERROR="Do not run this script as root (sudo). Use your normal user."
+    MSG_KLIPPER_ERROR="Klipper directory not found in your home directory."
+    MSG_KLIPPER_INSTALL="Make sure Klipper is installed before running this script."
+    MSG_CHECK_DIRS="Checking required directories..."
+    MSG_EXTRAS_CHECKED="Extras directory checked."
+    MSG_CONFIG_NOT_FOUND="Could not automatically find the configuration directory."
+    MSG_ENTER_PATH="Please enter the full path to your Klipper configuration directory:"
+    MSG_DIR_NOT_EXISTS="Directory does not exist. Installation canceled."
+    MSG_CONFIG_FOUND="Configuration directory found:"
+    MSG_UI_CHOICE="Which interface are you using? (1 = Fluidd, 2 = Mainsail, 3 = Both)"
+    MSG_SETUP_FLUIDD="Setting up for Fluidd (default)..."
+    MSG_SETUP_MAINSAIL="Setting up for Mainsail..."
+    MSG_SETUP_BOTH="Setting up for both Fluidd and Mainsail..."
+    MSG_UI_DIRS_CREATED="UI directories created."
+    MSG_DL_MODULE="Downloading Python module auto_power_off.py..."
+    MSG_MODULE_DOWNLOADED="Python module downloaded."
+    MSG_CREATING_LANG_DIRS="Creating language directories..."
+    MSG_LANG_DIRS_CREATED="Language directories created."
+    MSG_DL_EN_TRANS="Downloading English translations..."
+    MSG_EN_TRANS_DOWNLOADED="English translations downloaded."
+    MSG_DL_FR_TRANS="Downloading French translations..."
+    MSG_FR_TRANS_DOWNLOADED="French translations downloaded."
+    MSG_CREATE_FLUIDD="Creating Fluidd panel..."
+    MSG_FLUIDD_CREATED="Fluidd panel created."
+    MSG_CREATE_MAINSAIL="Creating Mainsail panel..."
+    MSG_MAINSAIL_CREATED="Mainsail panel created."
+    MSG_MODIFY_CFG="Modifying printer.cfg file..."
+    MSG_CFG_NOT_FOUND="printer.cfg file not found at location:"
+    MSG_MANUAL_ADD="You will need to manually add the configuration to your printer.cfg file."
+    MSG_AUTO_ADD_CFG="Do you want to automatically add the configuration to the printer.cfg file? [y/N]"
+    MSG_SECTION_EXISTS="The [auto_power_off] section already exists in printer.cfg."
+    MSG_CHECK_UPDATE="Please check and update the configuration manually."
+    MSG_CFG_ADDED="Configuration added to printer.cfg file."
+    MSG_CFG_NOT_ADDED="Configuration not added. You will need to add it manually."
+    MSG_RESTART_KLIPPER="Do you want to restart Klipper now to apply the changes? [y/N]"
+    MSG_RESTARTING="Restarting Klipper..."
+    MSG_RESTARTED="Klipper restarted."
+    MSG_WAIT_RESTART="Wait a few seconds for Klipper to fully restart..."
+    MSG_LOADED_SUCCESS="The Auto Power Off module was loaded successfully!"
+    MSG_VERIFY_FAILED="Could not verify module loading. Please check Klipper logs."
+    MSG_NOT_RESTARTED="Klipper was not restarted. Please restart it manually to apply the changes."
+    MSG_RESTART_CMD="Command to restart: sudo systemctl restart klipper"
+    MSG_INSTALL_COMPLETE="Installation complete!"
+    MSG_HOW_TO_USE="=== How to Use ===="
+    MSG_PANEL_AVAILABLE="1. The Auto Power Off panel will be available in the Fluidd/Mainsail interface"
+    MSG_AUTO_ACTIVATE="2. The module will automatically activate at the end of each print if configured so"
+    MSG_AVAILABLE_CMDS="3. Available GCODE commands:"
+    MSG_CMD_ON="   - AUTO_POWEROFF ON    - Globally enable the function"
+    MSG_CMD_OFF="   - AUTO_POWEROFF OFF   - Globally disable the function"
+    MSG_CMD_START="   - AUTO_POWEROFF START - Manually start the timer"
+    MSG_CMD_CANCEL="   - AUTO_POWEROFF CANCEL - Cancel the current timer"
+    MSG_CMD_NOW="   - AUTO_POWEROFF NOW   - Immediately power off the printer"
+    MSG_CMD_STATUS="   - AUTO_POWEROFF STATUS - Display detailed status"
+    MSG_CMD_DIAGNOSTIC="   - AUTO_POWEROFF DIAGNOSTIC VALUE=1 - Enable diagnostic mode (0 to disable)"
+    MSG_CHECK_LOGS="If you encounter any issues, check the Klipper logs with: tail -f /tmp/klippy.log"
+    MSG_YES_CONFIRM="y"
+fi
 
 # Check if script is run as root
 if [ "$EUID" -eq 0 ]; then
-    print_error "Do not run this script as root (sudo). Use your normal user."
+    print_error "$MSG_ROOT_ERROR"
     exit 1
 fi
 
 # Check if Klipper is installed
 if [ ! -d ~/klipper ]; then
-    print_error "Klipper directory not found in your home directory."
-    print_error "Make sure Klipper is installed before running this script."
+    print_error "$MSG_KLIPPER_ERROR"
+    print_error "$MSG_KLIPPER_INSTALL"
     exit 1
 fi
 
 # Create Klipper extras directory if needed
-print_status "Checking required directories..."
+print_status "$MSG_CHECK_DIRS"
 mkdir -p ~/klipper/klippy/extras
-print_success "Extras directory checked."
+mkdir -p ~/klipper/klippy/extras/auto_power_off_langs
+print_success "$MSG_EXTRAS_CHECKED"
 
 # Auto-detect configuration path
 PRINTER_CONFIG_DIR=""
@@ -59,400 +227,89 @@ for path in "${POSSIBLE_PATHS[@]}"; do
 done
 
 if [ -z "$PRINTER_CONFIG_DIR" ]; then
-    print_error "Could not automatically find the configuration directory."
-    echo "Please enter the full path to your Klipper configuration directory:"
+    print_error "$MSG_CONFIG_NOT_FOUND"
+    echo "$MSG_ENTER_PATH"
     read -r PRINTER_CONFIG_DIR
     
     if [ ! -d "$PRINTER_CONFIG_DIR" ]; then
-        print_error "Directory does not exist. Installation canceled."
+        print_error "$MSG_DIR_NOT_EXISTS"
         exit 1
     fi
 fi
 
-print_success "Configuration directory found: $PRINTER_CONFIG_DIR"
+print_success "$MSG_CONFIG_FOUND $PRINTER_CONFIG_DIR"
 
-# Create directory for Fluidd
+# Detect the interface used (Fluidd or Mainsail)
+UI_TYPE="fluidd"
+echo "$MSG_UI_CHOICE"
+read -r UI_CHOICE
+
+case $UI_CHOICE in
+    2)
+        UI_TYPE="mainsail"
+        print_status "$MSG_SETUP_MAINSAIL"
+        ;;
+    3)
+        UI_TYPE="both"
+        print_status "$MSG_SETUP_BOTH"
+        ;;
+    *)
+        print_status "$MSG_SETUP_FLUIDD"
+        ;;
+esac
+
+# Create directories for the UI
 mkdir -p $PRINTER_CONFIG_DIR/fluidd
-print_success "Fluidd directory created."
+if [ "$UI_TYPE" = "mainsail" ] || [ "$UI_TYPE" = "both" ]; then
+    mkdir -p $PRINTER_CONFIG_DIR/mainsail
+fi
+print_success "$MSG_UI_DIRS_CREATED"
 
-# Create Python module
-print_status "Creating Python module auto_power_off.py..."
-cat > ~/klipper/klippy/extras/auto_power_off.py << 'EOF'
-# auto_power_off.py
-# Automatic power off script for 3D printers running Klipper
-# Place in the ~/klipper/klippy/extras/ folder
+# Download the Python module
+print_status "$MSG_DL_MODULE"
+wget -q -O ~/klipper/klippy/extras/auto_power_off.py "$REPO_URL/src/auto_power_off.py"
+print_success "$MSG_MODULE_DOWNLOADED"
 
-import logging
-import threading
-import time
+# Download translation files
+print_status "$MSG_DL_EN_TRANS"
+wget -q -O ~/klipper/klippy/extras/auto_power_off_langs/en.json "$REPO_URL/src/auto_power_off_langs/en.json"
+print_success "$MSG_EN_TRANS_DOWNLOADED"
 
-class AutoPowerOff:
-    def __init__(self, config):
-        self.printer = config.get_printer()
-        self.reactor = self.printer.get_reactor()
-        
-        # Configuration parameters
-        self.idle_timeout = config.getfloat('idle_timeout', 600.0)  # Idle time in seconds (10 min default)
-        self.temp_threshold = config.getfloat('temp_threshold', 40.0)  # Temperature threshold in °C
-        self.power_device = config.get('power_device', 'psu_control')  # Name of your power device
-        self.enabled = config.getboolean('auto_poweroff_enabled', False)  # Default enabled/disabled state
-        
-        # Register for events
-        self.printer.register_event_handler("klippy:ready", self._handle_ready)
-        self.printer.register_event_handler("print_stats:complete", self._handle_print_complete)
-        
-        # State variables
-        self.shutdown_timer = None
-        self.is_checking_temp = False
-        self.countdown_end = 0
-        self.last_temps = {"hotend": 0, "bed": 0}
-        
-        # Register gcode commands
-        gcode = self.printer.lookup_object('gcode')
-        gcode.register_command('AUTO_POWEROFF', self.cmd_AUTO_POWEROFF,
-                              desc=self.cmd_AUTO_POWEROFF_help)
-                              
-        # Register for Fluidd/Mainsail status API
-        self.printer.register_event_handler("klippy:connect", 
-                                           self._handle_connect)
-        
-        # Logging
-        self.logger = logging.getLogger('auto_power_off')
-        self.logger.setLevel(logging.INFO)
-    
-    def _handle_connect(self):
-        """Called on initial connection"""
-        # Register the object to make it accessible via API
-        self.printer.add_object("auto_power_off", self)
-    
-    def _handle_ready(self):
-        """Called when Klipper is ready"""
-        self.logger.info("Auto Power Off: Module initialized")
-        
-        # Set up periodic temperature checker
-        self.reactor.register_timer(self._update_temps, self.reactor.monotonic() + 1)
-    
-    def _handle_print_complete(self):
-        """Called when print is complete"""
-        if not self.enabled:
-            self.logger.info("Print complete, but auto power off is disabled")
-            return
-            
-        self.logger.info("Print complete, starting power-off timer")
-        
-        # Cancel any existing timer
-        if self.shutdown_timer is not None:
-            self.reactor.unregister_timer(self.shutdown_timer)
-        
-        # Start the idle timer
-        waketime = self.reactor.monotonic() + self.idle_timeout
-        self.countdown_end = self.reactor.monotonic() + self.idle_timeout
-        self.shutdown_timer = self.reactor.register_timer(self._check_conditions, waketime)
-    
-    def _check_conditions(self, eventtime):
-        """Check if conditions for power off are met"""
-        # Check current print state
-        print_stats = self.printer.lookup_object('print_stats', None)
-        if print_stats and print_stats.get_status(eventtime)['state'] != 'complete':
-            self.logger.info("Print in progress or resumed, canceling shutdown")
-            self.shutdown_timer = None
-            return self.reactor.NEVER
-        
-        # Check if printer is truly idle
-        idle_timeout = self.printer.lookup_object('idle_timeout')
-        if idle_timeout.get_status(eventtime)['state'] != 'Idle':
-            self.logger.info("Printer not idle, postponing shutdown")
-            return eventtime + 60.0  # Check again in 60 seconds
-        
-        # Check temperatures
-        heaters = self.printer.lookup_object('heaters')
-        hotend = self.printer.lookup_object('extruder').get_heater()
-        try:
-            bed = self.printer.lookup_object('heater_bed').get_heater()
-            bed_temp = heaters.get_status(eventtime)[bed.get_name()]['temperature']
-        except:
-            bed_temp = 0.0
-            
-        hotend_temp = heaters.get_status(eventtime)[hotend.get_name()]['temperature']
-        
-        if max(hotend_temp, bed_temp) > self.temp_threshold:
-            self.logger.info(f"Temperatures too high (Hotend: {hotend_temp:.1f}, Bed: {bed_temp:.1f}), postponing shutdown")
-            return eventtime + 60.0  # Check again in 60 seconds
-        
-        # All conditions met, power off the printer
-        self._power_off()
-        self.shutdown_timer = None
-        return self.reactor.NEVER
-    
-    def _power_off(self):
-        """Power off the printer"""
-        self.logger.info("Conditions met, powering off the printer")
-        
-        try:
-            # Access the power controller and turn it off
-            power_device = self.printer.lookup_object('power ' + self.power_device)
-            power_device.set_power(0)
-            self.logger.info("Printer powered off successfully")
-        except Exception as e:
-            self.logger.error(f"Error during power off: {str(e)}")
-    
-    def _update_temps(self, eventtime):
-        """Update temperatures for status API"""
-        try:
-            heaters = self.printer.lookup_object('heaters')
-            hotend = self.printer.lookup_object('extruder').get_heater()
-            hotend_temp = heaters.get_status(eventtime)[hotend.get_name()]['temperature']
-            
-            try:
-                bed = self.printer.lookup_object('heater_bed').get_heater()
-                bed_temp = heaters.get_status(eventtime)[bed.get_name()]['temperature']
-            except:
-                bed_temp = 0.0
-                
-            self.last_temps = {"hotend": hotend_temp, "bed": bed_temp}
-        except Exception as e:
-            self.logger.error(f"Error updating temperatures: {str(e)}")
-            
-        # Schedule next update in 1 second
-        return eventtime + 1.0
-        
-    def get_status(self, eventtime):
-        """Get status for Fluidd/Mainsail API"""
-        time_left = max(0, self.countdown_end - eventtime) if self.shutdown_timer is not None else 0
-        
-        return {
-            'enabled': self.enabled,
-            'active': self.shutdown_timer is not None,
-            'countdown': int(time_left),
-            'idle_timeout': int(self.idle_timeout),
-            'temp_threshold': self.temp_threshold,
-            'current_temps': self.last_temps
-        }
-        
-    cmd_AUTO_POWEROFF_help = "Configure or trigger automatic printer power off"
-    def cmd_AUTO_POWEROFF(self, gcmd):
-        """GCODE command to configure or trigger automatic power off"""
-        option = gcmd.get('OPTION', 'status')
-        
-        if option.lower() == 'on':
-            # Globally enable auto power off
-            self.enabled = True
-            gcmd.respond_info("Auto power off globally enabled")
-                
-        elif option.lower() == 'off':
-            # Globally disable auto power off
-            self.enabled = False
-            if self.shutdown_timer is not None:
-                self.reactor.unregister_timer(self.shutdown_timer)
-                self.shutdown_timer = None
-            gcmd.respond_info("Auto power off globally disabled")
-                
-        elif option.lower() == 'now':
-            # Trigger power off immediately
-            gcmd.respond_info("Powering off printer...")
-            # Small delay to allow gcode response to be sent
-            self.reactor.register_callback(lambda e: self._power_off())
-        
-        elif option.lower() == 'start':
-            # Start the idle timer
-            if not self.enabled:
-                gcmd.respond_info("Auto power off is globally disabled")
-                return
-            if self.shutdown_timer is None:
-                waketime = self.reactor.monotonic() + self.idle_timeout
-                self.countdown_end = self.reactor.monotonic() + self.idle_timeout
-                self.shutdown_timer = self.reactor.register_timer(self._check_conditions, waketime)
-                gcmd.respond_info("Auto power off timer started")
-            else:
-                gcmd.respond_info("Auto power off timer already active")
-                
-        elif option.lower() == 'cancel':
-            # Cancel the idle timer
-            if self.shutdown_timer is not None:
-                self.reactor.unregister_timer(self.shutdown_timer)
-                self.shutdown_timer = None
-                gcmd.respond_info("Auto power off timer canceled")
-            else:
-                gcmd.respond_info("No active auto power off timer")
-            
-        elif option.lower() == 'status':
-            # Display current status
-            enabled_status = "enabled" if self.enabled else "disabled"
-            timer_status = "active" if self.shutdown_timer is not None else "inactive"
-            temps = f"Hotend: {self.last_temps['hotend']:.1f}°C, Bed: {self.last_temps['bed']:.1f}°C"
-            
-            time_left = max(0, self.countdown_end - self.reactor.monotonic())
-            countdown = f"{int(time_left / 60)}m {int(time_left % 60)}s" if self.shutdown_timer is not None else "N/A"
-            
-            gcmd.respond_info(
-                f"Auto power off: {enabled_status}\n"
-                f"Timer: {timer_status} (Remaining: {countdown})\n"
-                f"Current temperatures: {temps}\n"
-                f"Temperature threshold: {self.temp_threshold}°C\n"
-                f"Idle timeout: {int(self.idle_timeout / 60)} minutes"
-            )
-            
-        else:
-            gcmd.respond_info("Unrecognized option. Use ON, OFF, START, CANCEL, NOW, or STATUS")
-
-def load_config(config):
-    return AutoPowerOff(config)
-EOF
-print_success "Python module created."
+print_status "$MSG_DL_FR_TRANS"
+wget -q -O ~/klipper/klippy/extras/auto_power_off_langs/fr.json "$REPO_URL/src/auto_power_off_langs/fr.json"
+print_success "$MSG_FR_TRANS_DOWNLOADED"
 
 # Create Fluidd configuration file
-print_status "Creating Fluidd panel..."
-cat > $PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg << 'EOF'
-<!-- auto_power_off.cfg - Fluidd panel for automatic power off -->
-<!-- Save this file in ~/printer_data/config/fluidd/auto_power_off.cfg -->
+if [ "$UI_TYPE" = "fluidd" ] || [ "$UI_TYPE" = "both" ]; then
+    print_status "$MSG_CREATE_FLUIDD"
+    wget -q -O $PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg "$REPO_URL/ui/fluidd/auto_power_off.cfg"
+    print_success "$MSG_FLUIDD_CREATED"
+fi
 
-{% set auto_power_off = printer['auto_power_off'] %}
-
-<v-card>
-  <v-card-title class="blue-grey darken-1 white--text">
-    <v-icon class="white--text">mdi-power-plug-off</v-icon>
-    Auto Power Off
-  </v-card-title>
-  <v-card-text class="py-3">
-    <v-layout align-center>
-      <v-flex>
-        <p class="mb-0">Global status:</p>
-      </v-flex>
-      <v-flex class="text-right">
-        <v-switch
-          v-model="auto_power_off_enabled"
-          hide-details
-          dense
-          class="mt-0"
-          @change="setPoweroffState"
-        />
-      </v-flex>
-    </v-layout>
-
-    <v-divider class="my-3"></v-divider>
-
-    <p v-if="auto_power_off.active" class="mb-2 mt-0">
-      <v-icon small color="orange">mdi-timer-outline</v-icon>
-      Printer will automatically power off in <strong>{{ formatTime(auto_power_off.countdown) }}</strong>
-    </p>
-    <p v-else class="mb-2 mt-0">
-      <v-icon small color="gray">mdi-timer-off-outline</v-icon>
-      No active power off timer
-    </p>
-
-    <p class="mb-2">
-      <v-icon small color="red">mdi-thermometer</v-icon>
-      Hotend temperature: <strong>{{ auto_power_off.current_temps.hotend.toFixed(1) }}°C</strong> 
-      | Bed: <strong>{{ auto_power_off.current_temps.bed.toFixed(1) }}°C</strong>
-    </p>
-
-    <p class="mb-2">
-      <v-icon small color="blue">mdi-alert-circle-outline</v-icon>
-      Power off will trigger when temperatures are below <strong>{{ auto_power_off.temp_threshold }}°C</strong>
-    </p>
-
-    <v-alert
-      v-if="auto_power_off.current_temps.hotend > auto_power_off.temp_threshold || auto_power_off.current_temps.bed > auto_power_off.temp_threshold"
-      dense
-      text
-      type="warning"
-      class="mt-2 mb-2"
-    >
-      Temperatures are still too high for power off
-    </v-alert>
-
-    <v-layout class="mt-3">
-      <v-btn
-        small
-        color="primary"
-        text
-        :disabled="!auto_power_off.enabled || auto_power_off.active"
-        @click="sendGcode('AUTO_POWEROFF START')"
-      >
-        <v-icon small class="mr-1">mdi-timer-outline</v-icon>
-        Start
-      </v-btn>
-      <v-btn
-        small
-        color="error"
-        text
-        :disabled="!auto_power_off.active"
-        @click="sendGcode('AUTO_POWEROFF CANCEL')"
-      >
-        <v-icon small class="mr-1">mdi-timer-off-outline</v-icon>
-        Cancel
-      </v-btn>
-      <v-spacer></v-spacer>
-      <v-btn
-        small
-        color="error"
-        @click="confirmShutdown"
-      >
-        <v-icon small class="mr-1">mdi-power</v-icon>
-        Power Off Now
-      </v-btn>
-    </v-layout>
-  </v-card-text>
-</v-card>
-
-<script>
-  export default {
-    data() {
-      return {
-        auto_power_off_enabled: this.printer.auto_power_off?.enabled || false
-      }
-    },
-    methods: {
-      setPoweroffState() {
-        const cmd = this.auto_power_off_enabled ? 'AUTO_POWEROFF ON' : 'AUTO_POWEROFF OFF'
-        this.$store.dispatch('server/addEvent', { message: `Auto power off ${this.auto_power_off_enabled ? 'enabled' : 'disabled'}`, type: 'complete' })
-        this.$socket.emit('printer.gcode.script', { script: cmd })
-      },
-      confirmShutdown() {
-        this.$store.dispatch('power/createConfirmDialog', { 
-          title: 'Power Off Printer',
-          text: 'Are you sure you want to power off the printer now?',
-          onConfirm: () => this.sendGcode('AUTO_POWEROFF NOW')
-        })
-      },
-      sendGcode(gcode) {
-        this.$socket.emit('printer.gcode.script', { script: gcode })
-      },
-      formatTime(seconds) {
-        const minutes = Math.floor(seconds / 60)
-        seconds = seconds % 60
-        return `${minutes}m ${seconds}s`
-      }
-    },
-    watch: {
-      'printer.auto_power_off.enabled': {
-        deep: true,
-        handler(val) {
-          this.auto_power_off_enabled = val
-        }
-      }
-    }
-  }
-</script>
-EOF
-print_success "Fluidd panel created."
+# Create Mainsail configuration file
+if [ "$UI_TYPE" = "mainsail" ] || [ "$UI_TYPE" = "both" ]; then
+    print_status "$MSG_CREATE_MAINSAIL"
+    wget -q -O $PRINTER_CONFIG_DIR/mainsail/auto_power_off.cfg "$REPO_URL/ui/mainsail/auto_power_off.cfg"
+    wget -q -O $PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel.cfg "$REPO_URL/ui/mainsail/auto_power_off_panel.cfg"
+    print_success "$MSG_MAINSAIL_CREATED"
+fi
 
 # Ask user if they want to add the configuration to printer.cfg
-print_status "Modifying printer.cfg file..."
+print_status "$MSG_MODIFY_CFG"
 CONFIG_FILE="$PRINTER_CONFIG_DIR/printer.cfg"
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    print_error "printer.cfg file not found at location: $CONFIG_FILE"
-    print_warning "You will need to manually add the configuration to your printer.cfg file."
+    print_error "$MSG_CFG_NOT_FOUND $CONFIG_FILE"
+    print_warning "$MSG_MANUAL_ADD"
 else
-    echo "Do you want to automatically add the configuration to the printer.cfg file? [y/N]"
+    echo "$MSG_AUTO_ADD_CFG"
     read -r ADD_CONFIG
     
-    if [[ "$ADD_CONFIG" =~ ^[yY][eE]?[sS]?$ ]]; then
+    if [[ "$ADD_CONFIG" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
         # Check if [auto_power_off] section already exists
         if grep -q "\[auto_power_off\]" "$CONFIG_FILE"; then
-            print_warning "The [auto_power_off] section already exists in printer.cfg."
-            print_warning "Please check and update the configuration manually."
+            print_warning "$MSG_SECTION_EXISTS"
+            print_warning "$MSG_CHECK_UPDATE"
         else
             # Add configuration to file
             cat >> "$CONFIG_FILE" << 'EOL'
@@ -465,52 +322,64 @@ idle_timeout: 600     # Idle time in seconds before power off (10 minutes)
 temp_threshold: 40    # Temperature threshold in °C (printer considered cool)
 power_device: psu_control  # Name of your power device (must match the [power] section)
 auto_poweroff_enabled: True  # Enable auto power off by default at startup
-
-[include fluidd/auto_power_off.cfg]  # Include Fluidd panel (comment out if you don't use Fluidd)
+language: auto        # Language setting: 'en', 'fr', or 'auto' for auto-detection
+diagnostic_mode: False # Enable detailed logging for troubleshooting power off issues
 EOL
-            print_success "Configuration added to printer.cfg file."
+
+            # Add the appropriate include based on the interface
+            if [ "$UI_TYPE" = "fluidd" ]; then
+                echo -e "\n[include fluidd/auto_power_off.cfg]  # Include Fluidd panel" >> "$CONFIG_FILE"
+            elif [ "$UI_TYPE" = "mainsail" ]; then
+                echo -e "\n[include mainsail/auto_power_off.cfg]  # Include Mainsail panel" >> "$CONFIG_FILE"
+            else
+                echo -e "\n[include fluidd/auto_power_off.cfg]  # Include Fluidd panel" >> "$CONFIG_FILE"
+                echo -e "[include mainsail/auto_power_off.cfg]  # Include Mainsail panel" >> "$CONFIG_FILE"
+            fi
+            
+            print_success "$MSG_CFG_ADDED"
         fi
     else
-        print_warning "Configuration not added. You will need to add it manually."
+        print_warning "$MSG_CFG_NOT_ADDED"
     fi
 fi
 
 # Ask user if they want to restart Klipper
-echo "Do you want to restart Klipper now to apply the changes? [y/N]"
+echo "$MSG_RESTART_KLIPPER"
 read -r RESTART_KLIPPER
 
-if [[ "$RESTART_KLIPPER" =~ ^[yY][eE]?[sS]?$ ]]; then
-    print_status "Restarting Klipper..."
+if [[ "$RESTART_KLIPPER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
+    print_status "$MSG_RESTARTING"
     sudo systemctl restart klipper
-    print_success "Klipper restarted."
+    print_success "$MSG_RESTARTED"
     
-    echo "Wait a few seconds for Klipper to fully restart..."
+    echo "$MSG_WAIT_RESTART"
     sleep 5
     
     # Check if the module was loaded correctly
-    if grep -q "Auto Power Off: Module initialized" /tmp/klippy.log; then
-        print_success "The Auto Power Off module was loaded successfully!"
+    if grep -q "Auto Power Off: Module initialized" /tmp/klippy.log || grep -q "Auto Power Off: Module initialisé" /tmp/klippy.log; then
+        print_success "$MSG_LOADED_SUCCESS"
     else
-        print_warning "Could not verify module loading. Please check Klipper logs."
+        print_warning "$MSG_VERIFY_FAILED"
     fi
 else
-    print_warning "Klipper was not restarted. Please restart it manually to apply the changes."
-    echo "Command to restart: sudo systemctl restart klipper"
+    print_warning "$MSG_NOT_RESTARTED"
+    echo "$MSG_RESTART_CMD"
 fi
 
 echo ""
-print_success "Installation complete!"
+print_success "$MSG_INSTALL_COMPLETE"
 echo ""
-echo -e "${GREEN}=== How to Use ====${NC}"
-echo "1. The Auto Power Off panel will be available in the Fluidd interface"
-echo "2. The module will automatically activate at the end of each print if configured so"
-echo "3. Available GCODE commands:"
-echo "   - AUTO_POWEROFF ON    - Globally enable the function"
-echo "   - AUTO_POWEROFF OFF   - Globally disable the function"
-echo "   - AUTO_POWEROFF START - Manually start the timer"
-echo "   - AUTO_POWEROFF CANCEL - Cancel the current timer"
-echo "   - AUTO_POWEROFF NOW   - Immediately power off the printer"
-echo "   - AUTO_POWEROFF STATUS - Display detailed status"
+echo -e "${GREEN}$MSG_HOW_TO_USE${NC}"
+echo "$MSG_PANEL_AVAILABLE"
+echo "$MSG_AUTO_ACTIVATE"
+echo "$MSG_AVAILABLE_CMDS"
+echo "$MSG_CMD_ON"
+echo "$MSG_CMD_OFF"
+echo "$MSG_CMD_START"
+echo "$MSG_CMD_CANCEL"
+echo "$MSG_CMD_NOW"
+echo "$MSG_CMD_STATUS"
+echo "$MSG_CMD_DIAGNOSTIC"
 echo ""
-echo "If you encounter any issues, check the Klipper logs with: tail -f /tmp/klippy.log"
+echo "$MSG_CHECK_LOGS"
 echo ""

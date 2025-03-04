@@ -36,25 +36,22 @@ Your support is greatly appreciated and helps keep this project maintained and i
 
 1. Download the installation script:
    ```bash
-   # English version
    wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off.sh
-   
-   # French version
-   wget -O install_auto_power_off_fr.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off_fr.sh
    ```
 
 2. Make it executable:
    ```bash
    chmod +x install_auto_power_off.sh
-   # or
-   chmod +x install_auto_power_off_fr.sh
    ```
 
 3. Run the script:
    ```bash
+   # Run with default language (English)
    ./install_auto_power_off.sh
-   # or
-   ./install_auto_power_off_fr.sh
+
+   # Or specify a language
+   ./install_auto_power_off.sh --en  # English
+   ./install_auto_power_off.sh --fr  # French
    ```
 
 4. Follow the on-screen instructions.
@@ -121,6 +118,9 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `language` | auto | Language for messages: 'en' for English, 'fr' for French, 'auto' for auto-detection |
 | `moonraker_integration` | False | Enable integration with Moonraker's power control (optional) |
 | `moonraker_url` | http://localhost:7125 | URL for Moonraker API (optional) |
+| `diagnostic_mode` | False | Enable detailed logging for troubleshooting power off issues |
+| `power_off_retries` | 3 | Number of retry attempts when using Moonraker API |
+| `power_off_retry_delay` | 2 | Delay in seconds between retry attempts |
 
 ## Usage
 
@@ -151,6 +151,7 @@ The following GCODE commands are available:
 - `AUTO_POWEROFF STATUS` - Display detailed status
 - `AUTO_POWEROFF LANGUAGE VALUE=en` - Set language to English
 - `AUTO_POWEROFF LANGUAGE VALUE=fr` - Set language to French
+- `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Enable diagnostic mode for troubleshooting (0 to disable)
 
 ### End G-code Integration
 

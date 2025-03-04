@@ -36,25 +36,22 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
 
 1. Téléchargez le script d'installation :
    ```bash
-   # Version française
-   wget -O install_auto_power_off_fr.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off_fr.sh
-   
-   # Version anglaise
    wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off.sh
    ```
 
 2. Rendez-le exécutable :
    ```bash
-   chmod +x install_auto_power_off_fr.sh
-   # ou
    chmod +x install_auto_power_off.sh
    ```
 
 3. Exécutez le script :
    ```bash
-   ./install_auto_power_off_fr.sh
-   # ou
+   # Exécuter avec la langue par défaut (Anglais)
    ./install_auto_power_off.sh
+
+   # Ou spécifier une langue
+   ./install_auto_power_off.sh --fr  # Français
+   ./install_auto_power_off.sh --en  # Anglais
    ```
 
 4. Suivez les instructions à l'écran.
@@ -121,6 +118,9 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | `language` | auto | Langue pour les messages : 'en' pour l'anglais, 'fr' pour le français, 'auto' pour auto-détection |
 | `moonraker_integration` | False | Active l'intégration avec le contrôle d'alimentation de Moonraker (optionnel) |
 | `moonraker_url` | http://localhost:7125 | URL pour l'API Moonraker (optionnel) |
+| `diagnostic_mode` | False | Active la journalisation détaillée pour résoudre les problèmes d'extinction |
+| `power_off_retries` | 3 | Nombre de tentatives de nouvelle connexion lors de l'utilisation de l'API Moonraker |
+| `power_off_retry_delay` | 2 | Délai en secondes entre les tentatives |
 
 ## Utilisation
 
@@ -151,6 +151,7 @@ Les commandes GCODE suivantes sont disponibles :
 - `AUTO_POWEROFF STATUS` - Affiche l'état détaillé
 - `AUTO_POWEROFF LANGUAGE VALUE=en` - Définir la langue sur l'anglais
 - `AUTO_POWEROFF LANGUAGE VALUE=fr` -  Définir la langue sur le français
+- `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Activer le mode diagnostic pour le dépannage (0 pour désactiver)
 
 ### Intégration dans le G-code de fin
 

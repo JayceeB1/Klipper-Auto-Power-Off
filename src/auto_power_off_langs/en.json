@@ -27,5 +27,14 @@
     "disabled_status": "disabled",
     "timer_active": "active",
     "timer_inactive": "inactive",
-    "option_not_recognized": "Unrecognized option. Use ON, OFF, START, CANCEL, NOW, STATUS, or LANGUAGE"
-  }
+    "option_not_recognized": "Unrecognized option. Use ON, OFF, START, CANCEL, NOW, STATUS, or LANGUAGE",
+    "error_moonraker_all_retries_failed": "Failed to power off after {retries} attempts via Moonraker API. Last error: {error}",
+    "falling_back_to_direct": "Falling back to direct Klipper power control method",
+    "power_device_not_found": "Power device '{device}' not found in Moonraker. Check your configuration.",
+    "power_off_success": "Printer powered off successfully",
+    "power_off_failed": "Failed to power off printer: {error}",
+    "moonraker_retries_failed": "Could not power off via Moonraker after multiple attempts. Trying direct method.",
+    "diagnostic_mode_enabled": "Diagnostic mode enabled. Detailed logging activated.",
+    "diagnostic_mode_disabled": "Diagnostic mode disabled.",
+    "power_off_direct_attempt": "Attempting direct power off method"
+}
