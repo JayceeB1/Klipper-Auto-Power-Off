@@ -121,6 +121,12 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | `diagnostic_mode` | False | Active la journalisation détaillée pour résoudre les problèmes d'extinction |
 | `power_off_retries` | 3 | Nombre de tentatives de nouvelle connexion lors de l'utilisation de l'API Moonraker |
 | `power_off_retry_delay` | 2 | Délai en secondes entre les tentatives |
+| `dry_run_mode` | False | Simule l'extinction sans réellement éteindre l'imprimante (pour les tests) |
+| `network_device` | False | Indique si le périphérique d'alimentation est sur le réseau |
+| `device_address` | None | Adresse IP ou nom d'hôte du périphérique réseau |
+| `network_test_attempts` | 3 | Nombre de tentatives pour tester la connectivité du périphérique réseau |
+| `network_test_interval` | 1.0 | Intervalle en secondes entre les tentatives de test de connectivité réseau |
+
 
 ## Utilisation
 
@@ -152,6 +158,7 @@ Les commandes GCODE suivantes sont disponibles :
 - `AUTO_POWEROFF LANGUAGE VALUE=en` - Définir la langue sur l'anglais
 - `AUTO_POWEROFF LANGUAGE VALUE=fr` -  Définir la langue sur le français
 - `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Activer le mode diagnostic pour le dépannage (0 pour désactiver)
+- `AUTO_POWEROFF DRYRUN VALUE=1` - Activer le mode simulation qui simule l'extinction (0 pour désactiver)
 
 ### Intégration dans le G-code de fin
 
@@ -228,22 +235,70 @@ Consultez la [documentation de Moonraker](https://moonraker.readthedocs.io/en/la
 
 Si vous rencontrez des problèmes :
 
-1. Vérifiez les logs de Klipper :
-   ```bash
-   tail -f /tmp/klippy.log
-   ```
+### Problèmes courants et solutions
 
-2. Vérifiez que votre contrôle d'alimentation fonctionne :
-   ```
-   QUERY_POWER psu_control  # Remplacez par le nom de votre périphérique d'alimentation
-   ```
+#### Périphérique d'alimentation non trouvé
 
-3. Vérifiez l'état du module d'extinction automatique :
-   ```
-   AUTO_POWEROFF STATUS
-   ```
+Si vous voyez une erreur comme "Périphérique d'alimentation 'psu_control' introuvable" :
 
-4. Assurez-vous que votre configuration correspond à la configuration d'alimentation de votre imprimante.
+1. Assurez-vous d'avoir défini une section `[power]` dans votre configuration Klipper
+2. Vérifiez que le paramètre `power_device` dans `[auto_power_off]` correspond au nom dans votre section `[power]`
+3. Vérifiez que le périphérique d'alimentation est correctement configuré et fonctionnel en utilisant `QUERY_POWER nom_du_périphérique`
+
+#### Problèmes de connectivité des périphériques réseau
+
+Si vous utilisez un périphérique d'alimentation réseau (comme une prise intelligente) et rencontrez des problèmes de connectivité :
+
+1. Vérifiez que vous pouvez ping le périphérique depuis votre hôte Klipper
+2. Assurez-vous d'avoir défini `network_device: True` et fourni la bonne `device_address`
+3. Vérifiez les paramètres de pare-feu qui pourraient bloquer la communication
+
+#### Test avec le mode simulation
+
+Pour tester en toute sécurité la fonctionnalité d'extinction automatique sans réellement éteindre votre imprimante :
+
+1. Activez le mode simulation dans votre configuration : `dry_run_mode: True`
+2. Ou utilisez la commande GCODE : `AUTO_POWEROFF DRYRUN VALUE=1`
+3. Cela simulera l'extinction et journalisera toutes les actions sans réellement éteindre l'imprimante
+
+### Diagnostics détaillés des capacités du périphérique
+
+Pour comprendre quelles capacités votre périphérique d'alimentation possède :
+
+1. Activez le mode diagnostic : `AUTO_POWEROFF DIAGNOSTIC VALUE=1`
+2. Vérifiez les logs avec : `tail -f /tmp/klippy.log | grep -i auto_power_off`
+3. Les logs montreront quelles méthodes sont disponibles pour votre périphérique
+4. Cela aide à résoudre pourquoi l'extinction pourrait ne pas fonctionner
+
+### Périphériques compatibles
+
+Le module a été testé avec les types de périphériques d'alimentation suivants :
+
+| Type de périphérique | Compatibilité | Notes |
+|-------------|---------------|-------|
+| GPIO Raspberry Pi | Excellente | Contrôle direct via les broches GPIO |
+| Prises intelligentes TP-Link | Bonne | Nécessite une connectivité réseau |
+| Dispositifs Tasmota | Bonne | Nécessite une connectivité réseau |
+| Dispositifs Shelly | Bonne | Nécessite une connectivité réseau |
+| Prises intelligentes via MQTT | Bonne | Nécessite l'intégration Moonraker |
+| Cartes relais USB | Bonne | Lorsque configurées comme périphériques GPIO |
+
+## Utilisation avancée
+
+### Configuration des périphériques réseau
+
+Pour les périphériques d'alimentation basés sur le réseau (comme les prises intelligentes), une configuration supplémentaire est recommandée :
+
+```ini
+[auto_power_off]
+network_device: True  # Indiquer qu'il s'agit d'un périphérique réseau
+device_address: 192.168.1.123  # Adresse IP de votre prise intelligente
+network_test_attempts: 5  # Augmenter les tentatives pour les réseaux peu fiables
+network_test_interval: 2.0  # Attendre 2 secondes entre les tentatives de connexion
+dry_run_mode: False  # Mettre à True initialement pour les tests
+```
+
+Cette configuration active les tests de connectivité avant de tenter d'éteindre, améliorant la fiabilité avec les périphériques d'alimentation basés sur le réseau.
 
 ## Support linguistique
 

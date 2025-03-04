@@ -121,6 +121,12 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `diagnostic_mode` | False | Enable detailed logging for troubleshooting power off issues |
 | `power_off_retries` | 3 | Number of retry attempts when using Moonraker API |
 | `power_off_retry_delay` | 2 | Delay in seconds between retry attempts |
+| `dry_run_mode` | False | Simulate power off without actually powering off the printer (for testing) |
+| `network_device` | False | Indicate if the power device is on the network |
+| `device_address` | None | IP address or hostname of the network device |
+| `network_test_attempts` | 3 | Number of attempts to test network device connectivity |
+| `network_test_interval` | 1.0 | Interval in seconds between network connectivity test attempts |
+
 
 ## Usage
 
@@ -152,6 +158,7 @@ The following GCODE commands are available:
 - `AUTO_POWEROFF LANGUAGE VALUE=en` - Set language to English
 - `AUTO_POWEROFF LANGUAGE VALUE=fr` - Set language to French
 - `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Enable diagnostic mode for troubleshooting (0 to disable)
+- `AUTO_POWEROFF DRYRUN VALUE=1` - Enable dry run mode which simulates power off (0 to disable)
 
 ### End G-code Integration
 
@@ -227,24 +234,70 @@ See the [Moonraker documentation](https://moonraker.readthedocs.io/en/latest/con
 
 ## Troubleshooting
 
-If you encounter any issues:
+### Common Problems and Solutions
 
-1. Check Klipper logs:
-   ```bash
-   tail -f /tmp/klippy.log
-   ```
+#### Power Device Not Found
 
-2. Verify that your power control is working:
-   ```
-   QUERY_POWER psu_control  # Replace with your power device name
-   ```
+If you see an error like "Power device 'psu_control' not found":
 
-3. Check the status of the auto power off module:
-   ```
-   AUTO_POWEROFF STATUS
-   ```
+1. Make sure you have defined a `[power]` section in your Klipper configuration
+2. Verify that the `power_device` parameter in `[auto_power_off]` matches the name in your `[power]` section
+3. Check that the power device is properly configured and functional using `QUERY_POWER device_name`
 
-4. Make sure your configuration matches your printer's power setup.
+#### Network Device Connectivity Issues
+
+If using a network power device (like a smart plug) and having connectivity issues:
+
+1. Verify you can ping the device from your Klipper host
+2. Make sure you have set `network_device: True` and provided the correct `device_address`
+3. Check firewall settings that might block communication
+
+#### Testing with Dry Run Mode
+
+To safely test the auto power off functionality without actually powering off your printer:
+
+1. Enable dry run mode in your configuration: `dry_run_mode: True`
+2. Or use the GCODE command: `AUTO_POWEROFF DRYRUN VALUE=1`
+3. This will simulate power off and log all actions without actually powering off the printer
+
+### Detailed Device Capability Diagnostics
+
+To understand what capabilities your power device has:
+
+1. Enable diagnostic mode: `AUTO_POWEROFF DIAGNOSTIC VALUE=1`
+2. Check logs with: `tail -f /tmp/klippy.log | grep -i auto_power_off`
+3. The logs will show what methods are available for your device
+4. This helps troubleshoot why power off might not be working
+
+### Compatible Devices
+
+The module has been tested with the following power device types:
+
+| Device Type | Compatibility | Notes |
+|-------------|---------------|-------|
+| Raspberry Pi GPIO | Excellent | Direct control via GPIO pins |
+| TP-Link Smart Plugs | Good | Requires network connectivity |
+| Tasmota Devices | Good | Requires network connectivity |
+| Shelly Devices | Good | Requires network connectivity |
+| Smart Plugs via MQTT | Good | Requires Moonraker integration |
+| USB Relay Boards | Good | When configured as GPIO devices |
+
+## Advanced Usage
+
+### Network Device Configuration
+
+For network-based power devices (such as smart plugs), additional configuration is recommended:
+
+```ini
+[auto_power_off]
+network_device: True  # Indicate this is a network device
+device_address: 192.168.1.123  # IP address of your smart plug
+network_test_attempts: 5  # Increase attempts for unreliable networks
+network_test_interval: 2.0  # Wait 2 seconds between connection attempts
+dry_run_mode: False  # Set to True initially for testing
+```
+
+This configuration enables connectivity testing before attempting to power off, improving reliability with network-based power devices.
 
 ## Language Support
 
