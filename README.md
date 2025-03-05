@@ -164,7 +164,6 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `network_test_attempts` | 3 | Number of attempts to test network device connectivity |
 | `network_test_interval` | 1.0 | Interval in seconds between network connectivity test attempts |
 
-
 ## Usage
 
 ### Fluidd Interface
