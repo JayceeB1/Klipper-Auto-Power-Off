@@ -105,6 +105,43 @@ Your support is greatly appreciated and helps keep this project maintained and i
    sudo systemctl restart klipper
    ```
 
+## Uninstallation
+
+If you need to uninstall the Auto Power Off module, follow these steps:
+
+1. Remove the module files:
+   ```bash
+   # Remove the main Python module
+   rm ~/klipper/klippy/extras/auto_power_off.py
+   
+   # Remove the translations directory
+   rm -rf ~/klipper/klippy/extras/auto_power_off_langs
+   
+   # Remove UI configuration files (based on your interface)
+   rm ~/printer_data/config/fluidd/auto_power_off*.cfg
+   rm ~/printer_data/config/mainsail/auto_power_off*.cfg
+   
+   # Remove the language persistence file
+   rm ~/printer_data/config/auto_power_off_language.conf
+   ```
+
+2. Edit your printer.cfg file to remove the entire [auto_power_off] section and any related include lines.
+
+   ```
+   [auto_power_off]
+   idle_timeout: 600
+   temp_threshold: 40
+   ...
+
+   [include fluidd/auto_power_off.cfg]
+   [include mainsail/auto_power_off.cfg]
+   ```
+
+3. Restart Klipper
+   ```bash
+   sudo systemctl restart klipper
+   ```
+
 ## Configuration
 
 The following parameters can be configured in the `[auto_power_off]` section:
