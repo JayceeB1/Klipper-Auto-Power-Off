@@ -422,8 +422,13 @@ class AutoPowerOff:
     
     def _handle_connect(self):
         """Called on initial connection / Appelé lors de la connexion initiale"""
-        # Register the object to make it accessible via API / Enregistrer l'objet pour qu'il soit accessible via l'API
-        self.printer.add_object("auto_power_off", self)
+        # Vérifier si l'objet existe déjà avant de l'ajouter
+        try:
+            self.printer.lookup_object("auto_power_off")
+            # L'objet existe déjà, ne rien faire
+        except self.printer.config_error:
+            # L'objet n'existe pas encore, l'ajouter
+            self.printer.add_object("auto_power_off", self)
     
     def _handle_ready(self):
         """Called when Klipper is ready / Appelé quand Klipper est prêt"""
@@ -951,3 +956,6 @@ class AutoPowerOff:
                 
         else:
             gcmd.respond_info(self.get_text("option_not_recognized"))
+
+def load_config(config):
+    return AutoPowerOff(config)

@@ -345,17 +345,52 @@ else
     read -r ADD_CONFIG
     
     if [[ "$ADD_CONFIG" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
-        # Check if [auto_power_off] section already exists
-        if grep -q "\[auto_power_off\]" "$CONFIG_FILE"; then
-            print_warning "$MSG_SECTION_EXISTS"
-            print_warning "$MSG_CHECK_UPDATE"
+    # Check if [auto_power_off] section already exists
+    if grep -q "\[auto_power_off\]" "$CONFIG_FILE"; then
+        print_warning "$MSG_SECTION_EXISTS"
+        print_warning "$MSG_CHECK_UPDATE"
+    else
+        # Add configuration to file
+        # Vérifier si SAVE_CONFIG existe dans le fichier
+        if grep -q "SAVE_CONFIG" "$CONFIG_FILE"; then
+            # Préparer le texte de configuration à insérer
+            CONFIG_TEXT="\n#\n# Auto Power Off Configuration\n#\n"
+            
+            # Ajouter les includes appropriés en fonction de l'interface
+            if [ "$UI_TYPE" = "fluidd" ]; then
+                CONFIG_TEXT="${CONFIG_TEXT}[include fluidd/auto_power_off.cfg]  # Include Fluidd panel\n\n"
+            elif [ "$UI_TYPE" = "mainsail" ]; then
+                CONFIG_TEXT="${CONFIG_TEXT}[include mainsail/auto_power_off.cfg]  # Include Mainsail panel\n\n"
+            else
+                CONFIG_TEXT="${CONFIG_TEXT}[include fluidd/auto_power_off.cfg]  # Include Fluidd panel\n"
+                CONFIG_TEXT="${CONFIG_TEXT}[include mainsail/auto_power_off.cfg]  # Include Mainsail panel\n\n"
+            fi
+            
+            # Ajouter la section auto_power_off
+            CONFIG_TEXT="${CONFIG_TEXT}[auto_power_off]\nidle_timeout: 600     # Idle time in seconds before power off (10 minutes)\ntemp_threshold: 40    # Temperature threshold in °C (printer considered cool)\npower_device: psu_control  # Name of your power device (must match the [power] section)\nauto_poweroff_enabled: True  # Enable auto power off by default at startup\nlanguage: auto        # Language setting: 'en', 'fr', or 'auto' for auto-detection\ndiagnostic_mode: False # Enable detailed logging for troubleshooting power off issues"
+            
+            # Insérer avant la section SAVE_CONFIG
+            awk -v config="$CONFIG_TEXT" '/SAVE_CONFIG/{ print config; print } !/SAVE_CONFIG/{ print }' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
         else
-            # Add configuration to file
+            # Si pas de SAVE_CONFIG, ajouter à la fin
             cat >> "$CONFIG_FILE" << 'EOL'
 
 #
 # Auto Power Off Configuration
 #
+EOL
+
+            # Add the appropriate include based on the interface
+            if [ "$UI_TYPE" = "fluidd" ]; then
+                echo -e "[include fluidd/auto_power_off.cfg]  # Include Fluidd panel\n" >> "$CONFIG_FILE"
+            elif [ "$UI_TYPE" = "mainsail" ]; then
+                echo -e "[include mainsail/auto_power_off.cfg]  # Include Mainsail panel\n" >> "$CONFIG_FILE"
+            else
+                echo -e "[include fluidd/auto_power_off.cfg]  # Include Fluidd panel" >> "$CONFIG_FILE"
+                echo -e "[include mainsail/auto_power_off.cfg]  # Include Mainsail panel\n" >> "$CONFIG_FILE"
+            fi
+
+            cat >> "$CONFIG_FILE" << 'EOL'
 [auto_power_off]
 idle_timeout: 600     # Idle time in seconds before power off (10 minutes)
 temp_threshold: 40    # Temperature threshold in °C (printer considered cool)
@@ -364,21 +399,12 @@ auto_poweroff_enabled: True  # Enable auto power off by default at startup
 language: auto        # Language setting: 'en', 'fr', or 'auto' for auto-detection
 diagnostic_mode: False # Enable detailed logging for troubleshooting power off issues
 EOL
-
-            # Add the appropriate include based on the interface
-            if [ "$UI_TYPE" = "fluidd" ]; then
-                echo -e "\n[include fluidd/auto_power_off.cfg]  # Include Fluidd panel" >> "$CONFIG_FILE"
-            elif [ "$UI_TYPE" = "mainsail" ]; then
-                echo -e "\n[include mainsail/auto_power_off.cfg]  # Include Mainsail panel" >> "$CONFIG_FILE"
-            else
-                echo -e "\n[include fluidd/auto_power_off.cfg]  # Include Fluidd panel" >> "$CONFIG_FILE"
-                echo -e "[include mainsail/auto_power_off.cfg]  # Include Mainsail panel" >> "$CONFIG_FILE"
-            fi
-            
-            print_success "$MSG_CFG_ADDED"
         fi
-    else
-        print_warning "$MSG_CFG_NOT_ADDED"
+        
+        print_success "$MSG_CFG_ADDED"
+    fi
+else
+    print_warning "$MSG_CFG_NOT_ADDED"
 
         # Ajout d'information sur la configuration Moonraker
         if [ "$LANG_CHOICE" = "fr" ]; then
@@ -427,7 +453,18 @@ if [[ "$RESTART_KLIPPER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
     sleep 5
     
     # Check if the module was loaded correctly
-    if grep -q "Auto Power Off: Module initialized" /tmp/klippy.log || grep -q "Auto Power Off: Module initialisé" /tmp/klippy.log; then
+    # Tenter de trouver le fichier de log Klipper
+    KLIPPY_LOG="/tmp/klippy.log"
+    if [ ! -f "$KLIPPY_LOG" ]; then
+        for possible_log in /var/log/klipper/klippy.log /home/*/printer_data/logs/klippy.log /home/*/klipper_logs/klippy.log; do
+            if [ -f "$possible_log" ]; then
+                KLIPPY_LOG="$possible_log"
+                break
+            fi
+        done
+    fi
+
+    if [ -f "$KLIPPY_LOG" ] && (grep -q "Auto Power Off: Module initialized" "$KLIPPY_LOG" || grep -q "Auto Power Off: Module initialisé" "$KLIPPY_LOG"); then
         print_success "$MSG_LOADED_SUCCESS"
     else
         print_warning "$MSG_VERIFY_FAILED"
