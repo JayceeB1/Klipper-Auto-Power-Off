@@ -48,5 +48,6 @@
     "dry_run_enabled": "Mode simulation activé. Les commandes d'extinction seront simulées.",
     "dry_run_disabled": "Mode simulation désactivé. Les commandes d'extinction éteindront réellement l'imprimante.",
     "network_device_unreachable": "Périphérique réseau '{device}' est inaccessible après {attempts} tentatives.",
-    "network_device_unreachable_poweroff": "Impossible d'éteindre: le périphérique réseau '{device}' est inaccessible."
+    "network_device_unreachable_poweroff": "Impossible d'éteindre: le périphérique réseau '{device}' est inaccessible.",
+    "temperatures_too_high_custom": "Températures trop élevées ({temp_msg}), maximum: {max_temp:.1f}°C, report de l'extinction"
 }

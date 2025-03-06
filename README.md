@@ -149,7 +149,10 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `idle_timeout` | 600 | Time in seconds to wait before powering off (after print completed) |
-| `temp_threshold` | 40 | Temperature in °C below which it's safe to power off |
+| `temp_threshold` | 40 | Temperature in °C below which it's safe to power off. By default, monitors both the hotend and heated bed, and uses the highest temperature for comparison |
+| `monitor_hotend` | True | Monitor hotend temperature for power off |
+| `monitor_bed` | True | Monitor heated bed temperature for power off |
+| `monitor_chamber` | False | Monitor chamber temperature for power off (if available) |
 | `power_device` | psu_control | Name of your power device (must match the [power] section) |
 | `auto_poweroff_enabled` | False | Enable auto power off by default at startup |
 | `language` | auto | Language for messages: 'en' for English, 'fr' for French, 'auto' for auto-detection |

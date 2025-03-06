@@ -152,7 +152,10 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | Paramètre | Défaut | Description |
 |-----------|---------|-------------|
 | `idle_timeout` | 600 | Temps en secondes à attendre avant l'extinction (après une impression terminée) |
-| `temp_threshold` | 40 | Température en °C en dessous de laquelle il est sûr d'éteindre |
+| `temp_threshold` | 40 | Température en °C en dessous de laquelle il est sûr d'éteindre. Par défaut, surveille à la fois l'extrudeur et le lit chauffant, et utilise la température la plus élevée pour comparaison |
+| `monitor_hotend` | True | Surveiller la température de l'extrudeur pour l'extinction |
+| `monitor_bed` | True | Surveiller la température du lit chauffant pour l'extinction |
+| `monitor_chamber` | False | Surveiller la température de la chambre pour l'extinction (si disponible) |
 | `power_device` | psu_control | Nom de votre périphérique d'alimentation (doit correspondre à la section [power]) |
 | `auto_poweroff_enabled` | False | Active l'extinction automatique par défaut au démarrage |
 | `language` | auto | Langue pour les messages : 'en' pour l'anglais, 'fr' pour le français, 'auto' pour auto-détection |

@@ -54,7 +54,12 @@ class AutoPowerOff:
         # Register for events / S'enregistrer pour les événements
         self.printer.register_event_handler("klippy:ready", self._handle_ready)
         self.printer.register_event_handler("print_stats:complete", self._handle_print_complete)
-        
+
+        # Monitored components configuration / Configuration des composants à surveiller
+        self.monitor_hotend = config.getboolean('monitor_hotend', True)
+        self.monitor_bed = config.getboolean('monitor_bed', True)
+        self.monitor_chamber = config.getboolean('monitor_chamber', False)
+            
         # State variables / Variables d'état
         self.shutdown_timer = None
         self.is_checking_temp = False
@@ -464,21 +469,51 @@ class AutoPowerOff:
             self.logger.info(self.get_text("printer_not_idle"))
             return eventtime + 60.0  # Check again in 60 seconds / Vérifier à nouveau dans 60 secondes
         
-        # Check temperatures / Vérifier les températures
+         # Check temperatures / Vérifier les températures
         heaters = self.printer.lookup_object('heaters')
-        hotend = self.printer.lookup_object('extruder').get_heater()
-        try:
-            bed = self.printer.lookup_object('heater_bed').get_heater()
-            bed_temp = heaters.get_status(eventtime)[bed.get_name()]['temperature']
-        except:
-            bed_temp = 0.0
-            
-        hotend_temp = heaters.get_status(eventtime)[hotend.get_name()]['temperature']
+        max_temp = 0.0
+        temps = {}
         
-        if max(hotend_temp, bed_temp) > self.temp_threshold:
-            self.logger.info(self.get_text("temperatures_too_high", 
-                                         hotend_temp=hotend_temp, 
-                                         bed_temp=bed_temp))
+        # Check hotend if enabled / Vérifier l'extrudeur si activé
+        if self.monitor_hotend:
+            try:
+                hotend = self.printer.lookup_object('extruder').get_heater()
+                hotend_temp = heaters.get_status(eventtime)[hotend.get_name()]['temperature']
+                temps['hotend'] = hotend_temp
+                max_temp = max(max_temp, hotend_temp)
+            except Exception as e:
+                self.logger.warning(f"Unable to get hotend temperature: {str(e)}")
+        
+        # Check bed if enabled / Vérifier le lit si activé
+        if self.monitor_bed:
+            try:
+                bed = self.printer.lookup_object('heater_bed', None)
+                if bed is not None:
+                    bed_temp = heaters.get_status(eventtime)[bed.get_heater().get_name()]['temperature']
+                    temps['bed'] = bed_temp
+                    max_temp = max(max_temp, bed_temp)
+            except Exception as e:
+                self.logger.warning(f"Unable to get bed temperature: {str(e)}")
+        
+        # Check chamber if enabled / Vérifier la chambre si activée
+        if self.monitor_chamber:
+            try:
+                chamber = self.printer.lookup_object('temperature_sensor chamber', None)
+                if chamber is not None:
+                    chamber_temp = chamber.get_status(eventtime)['temperature']
+                    temps['chamber'] = chamber_temp
+                    max_temp = max(max_temp, chamber_temp)
+            except Exception as e:
+                self.logger.warning(f"Unable to get chamber temperature: {str(e)}")
+        
+        # Update last temperatures for status / Mettre à jour les dernières températures pour le statut
+        self.last_temps = temps
+        
+        # Check if max temperature is below threshold / Vérifier si la température maximale est inférieure au seuil
+        if max_temp > self.temp_threshold:
+            # Format temperature message / Formater le message de température
+            temp_msg = ", ".join(f"{key}: {value:.1f}°C" for key, value in temps.items())
+            self.logger.info(self.get_text("temperatures_too_high_custom", temp_msg=temp_msg, max_temp=max_temp))
             return eventtime + 60.0  # Check again in 60 seconds / Vérifier à nouveau dans 60 secondes
         
         # All conditions met, power off the printer / Toutes les conditions sont remplies, éteindre l'imprimante
