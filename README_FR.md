@@ -227,6 +227,7 @@ Cette intégration vous permet de :
 
 ### Configuration
 
+```markdown
 1. **Configurez le module Power dans `moonraker.conf`**:
 
    ```ini
@@ -237,11 +238,13 @@ Cette intégration vous permet de :
    off_when_shutdown: True
    initial_state: off
    on_when_job_queued: True       # Allumer quand une impression est lancée
-   off_when_job_complete: False   # Laisser Auto Power Off gérer l'extinction
-   locked_while_printing: True
+   locked_while_printing: True    # Empêche l'extinction pendant l'impression
    restart_klipper_when_powered: True
    restart_delay: 3
    ```
+
+   > **Note importante**: Dans les versions récentes de Moonraker, l'option `off_when_job_complete` n'est plus disponible. Le module Auto Power Off prend en charge cette fonctionnalité, ce qui permet une extinction intelligente basée sur les températures et l'inactivité.
+```
 
 2. **Activez l'intégration dans `printer.cfg`**:
 
@@ -254,15 +257,17 @@ Cette intégration vous permet de :
    moonraker_url: http://localhost:7125  # URL de l'API Moonraker (optionnel)
    ```
 
+```markdown
 ### Comportement attendu
 
 1. Quand une impression est mise en file d'attente, Moonraker allume l'imprimante.
 2. Klipper redémarre automatiquement après la mise sous tension.
 3. L'imprimante ne peut pas être éteinte pendant l'impression (verrouillée).
-4. Quand l'impression est terminée, Auto Power Off surveille:
+4. Quand l'impression est terminée, Auto Power Off prend le contrôle et surveille:
    - Le délai d'inactivité configuré
    - Les températures de l'extrudeur et du lit
 5. Une fois les conditions remplies, Auto Power Off éteint l'imprimante.
+```
 
 ### Types de dispositifs pris en charge
 

@@ -223,6 +223,7 @@ This integration allows you to:
 
 ### Configuration
 
+```markdown
 1. **Configure the Power module in `moonraker.conf`**:
 
    ```ini
@@ -233,11 +234,13 @@ This integration allows you to:
    off_when_shutdown: True
    initial_state: off
    on_when_job_queued: True       # Power on when a print is queued
-   off_when_job_complete: False   # Let Auto Power Off handle power off
    locked_while_printing: True
    restart_klipper_when_powered: True
    restart_delay: 3
    ```
+
+   > **Important note**: In recent Moonraker versions, the `off_when_job_complete` option is no longer available. The Auto Power Off module handles this functionality, providing smart shutdown based on temperatures and idle timeout settings.
+```
 
 2. **Enable integration in `printer.cfg`**:
 
@@ -250,15 +253,17 @@ This integration allows you to:
    moonraker_url: http://localhost:7125  # Moonraker API URL (optional)
    ```
 
+```markdown
 ### Expected Behavior
 
 1. When a print is queued, Moonraker powers on the printer.
 2. Klipper automatically restarts after power on.
 3. The printer cannot be powered off during printing (locked).
-4. When the print is complete, Auto Power Off monitors:
+4. When the print is complete, Auto Power Off takes control and monitors:
    - The configured idle timeout
    - Hotend and bed temperatures
 5. Once conditions are met, Auto Power Off powers off the printer.
+```
 
 ### Supported Device Types
 

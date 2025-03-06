@@ -49,6 +49,45 @@ print_error() {
     fi
 }
 
+# Montre un exemple de configuration Moonraker
+show_moonraker_config_example() {
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        cat << 'EOL'
+# Exemple de configuration Moonraker pour Auto Power Off
+[power printer]
+type: gpio                     # Type de dispositif: gpio, tplink_smartplug, tasmota, etc.
+pin: gpio27                    # Pour GPIO uniquement: broche à utiliser
+# address: 192.168.1.123       # Pour les appareils réseau: adresse IP
+off_when_shutdown: True
+initial_state: off
+on_when_job_queued: True       # Allumer quand une impression est lancée
+locked_while_printing: True    # Empêche l'extinction pendant l'impression
+restart_klipper_when_powered: True
+restart_delay: 3
+
+# Note: L'option 'off_when_job_complete' n'est plus disponible dans les versions récentes de Moonraker.
+# Le module Auto Power Off s'occupe de l'extinction après une impression complète.
+EOL
+    else
+        cat << 'EOL'
+# Example Moonraker configuration for Auto Power Off
+[power printer]
+type: gpio                     # Device type: gpio, tplink_smartplug, tasmota, etc.
+pin: gpio27                    # For GPIO only: pin to use
+# address: 192.168.1.123       # For network devices: IP address
+off_when_shutdown: True
+initial_state: off
+on_when_job_queued: True       # Power on when a print is queued
+locked_while_printing: True    # Prevents power off during printing
+restart_klipper_when_powered: True
+restart_delay: 3
+
+# Note: The 'off_when_job_complete' option is no longer available in recent Moonraker versions.
+# The Auto Power Off module handles shutdown after a completed print.
+EOL
+    fi
+}
+
 # Check script arguments for language preference
 for arg in "$@"; do
     case $arg in
@@ -340,6 +379,38 @@ EOL
         fi
     else
         print_warning "$MSG_CFG_NOT_ADDED"
+
+        # Ajout d'information sur la configuration Moonraker
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            echo "Voulez-vous voir un exemple de configuration Moonraker pour l'intégration avec Auto Power Off? [o/N]"
+        else
+            echo "Would you like to see an example Moonraker configuration for integration with Auto Power Off? [y/N]"
+        fi
+        read -r SHOW_MOONRAKER_CONFIG
+
+        if [[ "$SHOW_MOONRAKER_CONFIG" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
+            echo ""
+            if [ "$LANG_CHOICE" = "fr" ]; then
+                echo "=== Configuration Moonraker recommandée ==="
+                echo "Ajoutez cette section à votre fichier moonraker.conf:"
+                echo ""
+            else
+                echo "=== Recommended Moonraker Configuration ==="
+                echo "Add this section to your moonraker.conf file:"
+                echo ""
+            fi
+            
+            show_moonraker_config_example
+            
+            echo ""
+            if [ "$LANG_CHOICE" = "fr" ]; then
+                echo "IMPORTANT: N'utilisez pas l'option 'off_when_job_complete', elle est obsolète."
+            else
+                echo "IMPORTANT: Do not use the 'off_when_job_complete' option, it is deprecated."
+            fi
+            echo ""            
+        fi
+
     fi
 fi
 
@@ -376,6 +447,14 @@ echo "$MSG_AVAILABLE_CMDS"
 echo "$MSG_CMD_ON"
 echo "$MSG_CMD_OFF"
 echo "$MSG_CMD_START"
+# Note on Moonraker integration.
+if [ "$LANG_CHOICE" = "fr" ]; then
+    echo -e "\n${YELLOW}Note sur l'intégration Moonraker:${NC} L'option 'off_when_job_complete' est obsolète dans les versions récentes de Moonraker."
+    echo "Le module Auto Power Off gère l'extinction intelligente après l'impression en fonction des températures et de l'inactivité."
+else
+    echo -e "\n${YELLOW}Note on Moonraker integration:${NC} The 'off_when_job_complete' option is deprecated in recent Moonraker versions."
+    echo "The Auto Power Off module handles intelligent shutdown after printing based on temperatures and idle timeout."
+fi
 echo "$MSG_CMD_CANCEL"
 echo "$MSG_CMD_NOW"
 echo "$MSG_CMD_STATUS"

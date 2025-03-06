@@ -439,11 +439,19 @@ class AutoPowerOff:
         self.reactor.register_timer(self._update_temps, self.reactor.monotonic() + 1)
     
     def _handle_print_complete(self):
-        """Called when print is complete / Appelé quand l'impression est terminée"""
+        """
+        Called when print is complete / Appelé quand l'impression est terminée
+        
+        Note: This replaces the now deprecated Moonraker 'off_when_job_complete' functionality
+        with a more intelligent approach that checks temperatures and allows cooling before shutdown.
+        
+        Note (FR): Ceci remplace la fonctionnalité 'off_when_job_complete' de Moonraker (maintenant obsolète)
+        avec une approche plus intelligente qui vérifie les températures et permet le refroidissement avant l'extinction.
+        """
         if not self.enabled:
             self.logger.info(self.get_text("print_complete_disabled"))
             return
-            
+                
         self.logger.info(self.get_text("print_complete_starting_timer"))
         
         # Cancel any existing timer / Annuler tout minuteur existant
