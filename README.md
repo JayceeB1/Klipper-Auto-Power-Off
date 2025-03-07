@@ -15,6 +15,7 @@ A Klipper module that automatically powers off your 3D printer after a completed
 - Works with any GPIO-controlled power device
 - Available in English and French
 - Compatible with all Moonraker power device types (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
+- Web interface focused: LCD menus have been removed for simplicity
 
 ## Requirements
 
@@ -29,6 +30,16 @@ If you find this module useful, consider buying me a coffee to support further d
 [![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/jayceeB1)
 
 Your support is greatly appreciated and helps keep this project maintained and improved!
+
+## Important Update
+
+As of the latest version, Auto Power Off works primarily through Moonraker's power control API. The module is now configured by default to use Moonraker integration, providing better compatibility with various power device types.
+
+### Key Changes
+- Moonraker integration is now enabled by default
+- Configuration requires your device to be properly set up in Moonraker's config
+- Improved reliability and compatibility with network-based power devices
+- LCD menu entries have been removed to focus on web interface integration
 
 ## Installation
 
@@ -181,8 +192,7 @@ Once installed, you'll see an "Auto Power Off" panel in your Fluidd interface th
 
 For Mainsail, you'll have access to:
 - A set of GCODE commands to control auto power off
-- A menu in the interface to access power off functions
-- Configurable buttons to control the function (if you set up the GPIOs)
+- Configurable GPIO buttons to control the function (if you set up the GPIO pins)
 
 ### GCODE Commands
 
@@ -286,7 +296,7 @@ If you see an error like "Power device 'psu_control' not found":
 
 1. Make sure you have defined a `[power]` section in your Klipper configuration
 2. Verify that the `power_device` parameter in `[auto_power_off]` matches the name in your `[power]` section
-3. Check that the power device is properly configured and functional using `QUERY_POWER device_name`
+3. Check that the power device is properly configured and functional by viewing its status in the Fluidd/Mainsail interface (under Machine tab)
 
 #### Network Device Connectivity Issues
 

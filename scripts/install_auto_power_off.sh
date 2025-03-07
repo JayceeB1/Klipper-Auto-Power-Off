@@ -396,6 +396,8 @@ idle_timeout: 600     # Idle time in seconds before power off (10 minutes)
 temp_threshold: 40    # Temperature threshold in °C (printer considered cool)
 power_device: psu_control  # Name of your power device (must match the [power] section)
 auto_poweroff_enabled: True  # Enable auto power off by default at startup
+moonraker_integration: True  # Enable Moonraker integration
+moonraker_url: http://localhost:7125  # Moonraker API URL (usually default)
 language: auto        # Language setting: 'en', 'fr', or 'auto' for auto-detection
 diagnostic_mode: False # Enable detailed logging for troubleshooting power off issues
 EOL

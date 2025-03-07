@@ -49,5 +49,6 @@
     "dry_run_disabled": "Dry run mode disabled. Power off commands will actually power off the printer.",
     "network_device_unreachable": "Network device '{device}' is unreachable after {attempts} attempts.",
     "network_device_unreachable_poweroff": "Cannot power off: network device '{device}' is unreachable.",
-    "temperatures_too_high_custom": "Temperatures too high ({temp_msg}), maximum: {max_temp:.1f}°C, postponing shutdown"
+    "temperatures_too_high_custom": "Temperatures too high ({temp_msg}), maximum: {max_temp:.1f}°C, postponing shutdown",
+    "print_in_progress_moonraker": "Print in progress detected via Moonraker (state: {state}), canceling shutdown"
 }

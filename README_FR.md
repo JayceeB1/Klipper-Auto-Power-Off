@@ -14,6 +14,7 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 - Contrôle manuel avec des commandes GCODE
 - Fonctionne avec n'importe quel périphérique d'alimentation contrôlé par GPIO
 - Compatible avec tous les types de dispositifs d'alimentation Moonraker (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
+- Focalisé sur l'interface web : les menus LCD ont été supprimés pour plus de simplicité
 
 ## Prérequis
 
@@ -29,6 +30,15 @@ Si vous trouvez ce module utile, vous pouvez m'offrir un café pour soutenir son
 
 Votre soutien est grandement apprécié et aide à maintenir et améliorer ce projet !
 
+## Mise à jour importante
+
+À partir de la dernière version, Auto Power Off fonctionne principalement via l'API de contrôle d'alimentation de Moonraker. Le module est maintenant configuré par défaut pour utiliser l'intégration Moonraker, offrant une meilleure compatibilité avec différents types de périphériques d'alimentation.
+
+### Changements clés
+- L'intégration Moonraker est maintenant activée par défaut
+- La configuration nécessite que votre périphérique soit correctement configuré dans la configuration de Moonraker
+- Fiabilité et compatibilité améliorées avec les périphériques d'alimentation réseau
+- Les entrées du menu LCD ont été supprimées pour se concentrer sur l'intégration de l'interface web
 
 ## Installation
 
@@ -185,8 +195,16 @@ Une fois installé, vous verrez un panneau "Extinction Automatique" dans votre i
 
 Pour Mainsail, vous aurez accès à :
 - Un ensemble de commandes GCODE pour contrôler l'extinction automatique
-- Un menu dans l'interface pour accéder aux fonctions d'extinction
-- Des boutons configurables pour contrôler la fonction (si vous configurez les GPIO)
+- Des boutons GPIO configurables pour contrôler la fonction (si vous configurez les GPIO)
+
+### Intégration dans le G-code de fin
+
+Pour activer l'extinction automatique uniquement pour certaines impressions, ajoutez ceci au G-code de fin de votre trancheur :
+
+```
+AUTO_POWEROFF ON  ; Active l'extinction automatique
+AUTO_POWEROFF START  ; Démarre le compte à rebours
+```
 
 ### Commandes GCODE
 
@@ -203,15 +221,6 @@ Les commandes GCODE suivantes sont disponibles :
 - `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Activer le mode diagnostic pour le dépannage (0 pour désactiver)
 - `AUTO_POWEROFF DRYRUN VALUE=1` - Activer le mode simulation qui simule l'extinction (0 pour désactiver)
 
-### Intégration dans le G-code de fin
-
-Pour activer l'extinction automatique uniquement pour certaines impressions, ajoutez ceci au G-code de fin de votre trancheur :
-
-```
-AUTO_POWEROFF ON  ; Active l'extinction automatique
-AUTO_POWEROFF START  ; Démarre le compte à rebours
-```
-
 ## Intégration avec Moonraker (Avancé)
 
 Auto Power Off peut fonctionner en tandem avec le module Power de Moonraker pour offrir un contrôle d'alimentation complet :
@@ -227,7 +236,6 @@ Cette intégration vous permet de :
 
 ### Configuration
 
-```markdown
 1. **Configurez le module Power dans `moonraker.conf`**:
 
    ```ini
@@ -244,7 +252,6 @@ Cette intégration vous permet de :
    ```
 
    > **Note importante**: Dans les versions récentes de Moonraker, l'option `off_when_job_complete` n'est plus disponible. Le module Auto Power Off prend en charge cette fonctionnalité, ce qui permet une extinction intelligente basée sur les températures et l'inactivité.
-```
 
 2. **Activez l'intégration dans `printer.cfg`**:
 
@@ -257,7 +264,6 @@ Cette intégration vous permet de :
    moonraker_url: http://localhost:7125  # URL de l'API Moonraker (optionnel)
    ```
 
-```markdown
 ### Comportement attendu
 
 1. Quand une impression est mise en file d'attente, Moonraker allume l'imprimante.
@@ -267,7 +273,6 @@ Cette intégration vous permet de :
    - Le délai d'inactivité configuré
    - Les températures de l'extrudeur et du lit
 5. Une fois les conditions remplies, Auto Power Off éteint l'imprimante.
-```
 
 ### Types de dispositifs pris en charge
 
@@ -281,8 +286,6 @@ Consultez la [documentation de Moonraker](https://moonraker.readthedocs.io/en/la
 
 ## Dépannage
 
-Si vous rencontrez des problèmes :
-
 ### Problèmes courants et solutions
 
 #### Périphérique d'alimentation non trouvé
@@ -291,7 +294,7 @@ Si vous voyez une erreur comme "Périphérique d'alimentation 'psu_control' intr
 
 1. Assurez-vous d'avoir défini une section `[power]` dans votre configuration Klipper
 2. Vérifiez que le paramètre `power_device` dans `[auto_power_off]` correspond au nom dans votre section `[power]`
-3. Vérifiez que le périphérique d'alimentation est correctement configuré et fonctionnel en utilisant `QUERY_POWER nom_du_périphérique`
+3. Vérifiez que le périphérique d'alimentation est correctement configuré et fonctionnel en consultant son état dans l'interface Fluidd/Mainsail (dans l'onglet Machine)
 
 #### Problèmes de connectivité des périphériques réseau
 

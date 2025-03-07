@@ -34,7 +34,7 @@ class AutoPowerOff:
         self.temp_threshold = config.getfloat('temp_threshold', 40.0)  # Temperature threshold in °C / Seuil de température en °C
         self.power_device = config.get('power_device', 'psu_control')  # Name of your power device / Le nom de votre périphérique d'alimentation
         self.enabled = config.getboolean('auto_poweroff_enabled', False)  # Default enabled/disabled state / État activé/désactivé par défaut
-        self.moonraker_integration = config.getboolean('moonraker_integration', False)  # Moonraker integration / Intégration avec Moonraker
+        self.moonraker_integration = config.getboolean('moonraker_integration', True)  # Moonraker integration / Intégration avec Moonraker
         self.moonraker_url = config.get('moonraker_url', "http://localhost:7125")  # Moonraker URL / URL de Moonraker
 
         # Diagnostic mode parameters / Paramètres du mode diagnostique
@@ -248,13 +248,20 @@ class AutoPowerOff:
 
     def _verify_power_device(self):
         """
-        Verify that the configured power device exists in Klipper
-        Vérifie que le périphérique d'alimentation configuré existe dans Klipper
+        Verify that the configured power device exists
+        Vérifie que le périphérique d'alimentation configuré existe
         """
         self.device_available = False
         
+        # Si l'intégration Moonraker est activée, ne pas essayer d'accéder au périphérique via Klipper
+        if self.moonraker_integration:
+            # On fera la vérification plus tard, lors de l'utilisation
+            self._diagnostic_log(f"Using device '{self.power_device}' via Moonraker integration", level="info")
+            self.device_available = True
+            return True
+        
+        # Uniquement pour les périphériques contrôlés directement par Klipper (sans Moonraker)
         try:
-            # Try to get the power device object / Essayer d'obtenir l'objet du périphérique d'alimentation
             device_name = f'power {self.power_device}'
             power_device = self.printer.lookup_object(device_name, None)
             
@@ -263,8 +270,6 @@ class AutoPowerOff:
                 self._notify_user("power_device_not_found", device=self.power_device)
                 return False
             
-            # Device exists, set flag and check its capabilities
-            # Le périphérique existe, définir le drapeau et vérifier ses capacités
             self.device_available = True
             self._check_device_capabilities()
             self._diagnostic_log(f"Power device '{self.power_device}' found", level="info")
@@ -467,22 +472,64 @@ class AutoPowerOff:
         waketime = self.reactor.monotonic() + self.idle_timeout
         self.countdown_end = self.reactor.monotonic() + self.idle_timeout
         self.shutdown_timer = self.reactor.register_timer(self._check_conditions, waketime)
-    
+   
+
+    def _check_print_status_via_moonraker(self):
+        """Vérifier l'état d'impression via l'API Moonraker"""
+        if not self.moonraker_integration:
+            return None
+            
+        import requests
+        import json
+        
+        try:
+            # Vérifier l'état d'impression via l'API Moonraker
+            url = f"{self.moonraker_url}/printer/objects/query?print_stats=state"
+            response = requests.get(url, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'result' in data and 'status' in data['result']:
+                    state = data['result']['status'].get('print_stats', {}).get('state')
+                    self._diagnostic_log(f"Moonraker print state: {state}", level="info")
+                    return state
+        except Exception as e:
+            self._diagnostic_log(f"Error checking print status via Moonraker: {str(e)}", level="warning")
+        
+        return None
+
     def _check_conditions(self, eventtime):
         """Check if conditions for power off are met / Vérifie si les conditions pour éteindre sont remplies"""
         # Check current print state / Vérifier l'état d'impression actuel
         print_stats = self.printer.lookup_object('print_stats', None)
-        if print_stats and print_stats.get_status(eventtime)['state'] != 'complete':
-            self.logger.info(self.get_text("print_in_progress"))
-            return self.reactor.NEVER
         
+        if print_stats:
+            state = print_stats.get_status(eventtime)['state']
+            if state in ['printing', 'paused']:
+                self.logger.info(self.get_text("print_in_progress"))
+                return self.reactor.NEVER
+        try:
+            gcode_move = self.printer.lookup_object('gcode_move')
+            if gcode_move and gcode_move.get_status(eventtime).get('is_printing', False):
+                self.logger.info(self.get_text("print_in_progress"))
+                return self.reactor.NEVER
+        except Exception as e:
+            self._diagnostic_log(f"Error checking gcode_move: {str(e)}", level="warning") 
+
+        # Vérification supplémentaire via Moonraker si disponible
+        if self.moonraker_integration:
+            moonraker_state = self._check_print_status_via_moonraker()
+            if moonraker_state in ['printing', 'paused']:
+                self.logger.info(self.get_text("print_in_progress_moonraker", state=moonraker_state))
+                return self.reactor.NEVER
+
         # Check if printer is truly idle / Vérifier si l'imprimante est vraiment inactive
         idle_timeout = self.printer.lookup_object('idle_timeout')
         if idle_timeout.get_status(eventtime)['state'] != 'Idle':
             self.logger.info(self.get_text("printer_not_idle"))
             return eventtime + 60.0  # Check again in 60 seconds / Vérifier à nouveau dans 60 secondes
         
-         # Check temperatures / Vérifier les températures
+        # Check temperatures / Vérifier les températures
         heaters = self.printer.lookup_object('heaters')
         max_temp = 0.0
         temps = {}
@@ -816,19 +863,51 @@ class AutoPowerOff:
     def _update_temps(self, eventtime):
         """Update temperatures for status API / Met à jour les températures pour l'API de status"""
         try:
-            heaters = self.printer.lookup_object('heaters')
-            hotend = self.printer.lookup_object('extruder').get_heater()
-            hotend_temp = heaters.get_status(eventtime)[hotend.get_name()]['temperature']
+            temps = {}
             
+            # Méthode simple et directe pour récupérer les températures
+            # Ces informations sont visibles dans les statistiques de Klipper
             try:
-                bed = self.printer.lookup_object('heater_bed').get_heater()
-                bed_temp = heaters.get_status(eventtime)[bed.get_name()]['temperature']
-            except:
-                bed_temp = 0.0
+                extruder = self.printer.lookup_object('extruder')
+                if extruder and hasattr(extruder, 'get_status'):
+                    status = extruder.get_status(eventtime)
+                    if 'temperature' in status:
+                        temps['hotend'] = status['temperature']
+            except Exception as e:
+                self.logger.debug(f"Error getting extruder temp: {str(e)}")
                 
-            self.last_temps = {"hotend": hotend_temp, "bed": bed_temp}
+            try:
+                heater_bed = self.printer.lookup_object('heater_bed')
+                if heater_bed and hasattr(heater_bed, 'get_status'):
+                    status = heater_bed.get_status(eventtime)
+                    if 'temperature' in status:
+                        temps['bed'] = status['temperature']
+            except Exception as e:
+                self.logger.debug(f"Error getting bed temp: {str(e)}")
+            
+            # Valeurs par défaut si non trouvées
+            if 'hotend' not in temps:
+                # Récupérer de manière alternative via les statistiques
+                try:
+                    stats = self.printer.lookup_object('extruder').stats(eventtime)
+                    if 'temp' in stats:
+                        temps['hotend'] = stats['temp']
+                except:
+                    temps['hotend'] = 0.0
+                    
+            if 'bed' not in temps:
+                # Récupérer de manière alternative via les statistiques
+                try:
+                    stats = self.printer.lookup_object('heater_bed').stats(eventtime)
+                    if 'temp' in stats:
+                        temps['bed'] = stats['temp']
+                except:
+                    temps['bed'] = 0.0
+            
+            self.last_temps = temps
+                
         except Exception as e:
-            self.logger.error(self.get_text("error_updating_temps", error=str(e)))
+            self.logger.error(f"Error updating temperatures: {str(e)}")
             
         # Schedule next update in 1 second / Planifier la prochaine mise à jour dans 1 seconde
         return eventtime + 1.0
