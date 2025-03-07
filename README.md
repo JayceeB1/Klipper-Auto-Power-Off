@@ -167,8 +167,8 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `power_device` | psu_control | Name of your power device (must match the [power] section) |
 | `auto_poweroff_enabled` | False | Enable auto power off by default at startup |
 | `language` | auto | Language for messages: 'en' for English, 'fr' for French, 'auto' for auto-detection |
-| `moonraker_integration` | False | Enable integration with Moonraker's power control (optional) |
-| `moonraker_url` | http://localhost:7125 | URL for Moonraker API (optional) |
+| `moonraker_integration` | True | Enable integration with Moonraker's power control |
+| `moonraker_url` | http://localhost:7125 | URL for Moonraker API |
 | `diagnostic_mode` | False | Enable detailed logging for troubleshooting power off issues |
 | `power_off_retries` | 3 | Number of retry attempts when using Moonraker API |
 | `power_off_retry_delay` | 2 | Delay in seconds between retry attempts |

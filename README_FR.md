@@ -169,8 +169,8 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | `power_device` | psu_control | Nom de votre périphérique d'alimentation (doit correspondre à la section [power]) |
 | `auto_poweroff_enabled` | False | Active l'extinction automatique par défaut au démarrage |
 | `language` | auto | Langue pour les messages : 'en' pour l'anglais, 'fr' pour le français, 'auto' pour auto-détection |
-| `moonraker_integration` | False | Active l'intégration avec le contrôle d'alimentation de Moonraker (optionnel) |
-| `moonraker_url` | http://localhost:7125 | URL pour l'API Moonraker (optionnel) |
+| `moonraker_integration` | True | Active l'intégration avec le contrôle d'alimentation de Moonraker |
+| `moonraker_url` | http://localhost:7125 | URL pour l'API Moonraker |
 | `diagnostic_mode` | False | Active la journalisation détaillée pour résoudre les problèmes d'extinction |
 | `power_off_retries` | 3 | Nombre de tentatives de nouvelle connexion lors de l'utilisation de l'API Moonraker |
 | `power_off_retry_delay` | 2 | Délai en secondes entre les tentatives |
