@@ -292,7 +292,7 @@ See the [Moonraker documentation](https://moonraker.readthedocs.io/en/latest/con
 
 #### CURL-based implementation
 
-Starting with version X.X.X, the Auto Power Off module uses the CURL command for communication with the Moonraker API instead of Python libraries like requests or urllib. This improves compatibility and reliability, avoiding external dependency issues.
+The Auto Power Off module uses the CURL command for communication with the Moonraker API instead of Python libraries like requests or urllib. This improves compatibility and reliability, avoiding external dependency issues.
 
 If you have problems communicating with Moonraker, check that the CURL command is available on your system:
 ```bash
