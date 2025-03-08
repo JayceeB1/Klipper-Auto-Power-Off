@@ -50,5 +50,12 @@
     "network_device_unreachable": "Network device '{device}' is unreachable after {attempts} attempts.",
     "network_device_unreachable_poweroff": "Cannot power off: network device '{device}' is unreachable.",
     "temperatures_too_high_custom": "Temperatures too high ({temp_msg}), maximum: {max_temp:.1f}°C, postponing shutdown",
-    "print_in_progress_moonraker": "Print in progress detected via Moonraker (state: {state}), canceling shutdown"
+    "print_in_progress_moonraker": "Print in progress detected via Moonraker (state: {state}), canceling shutdown",
+    "error_checking_mcu_status": "Error while checking MCU status: {error}",
+    "mcu_object_not_found": "MCU object not found",
+    "mcu_shutdown_disconnected": "MCU is shutdown or disconnected",
+    "error_disabling_heaters": "Error while turning off heaters: {error}",
+    "error_preparing_shutdown": "Error preparing for shutdown: {error}",
+    "shutdown_in_progress": "A shutdown is already in progress, command ignored",
+    "printer_already_shutdown": "Printer is already shutdown, aborting shutdown procedure"
 }

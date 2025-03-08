@@ -50,5 +50,12 @@
     "network_device_unreachable": "Périphérique réseau '{device}' est inaccessible après {attempts} tentatives.",
     "network_device_unreachable_poweroff": "Impossible d'éteindre: le périphérique réseau '{device}' est inaccessible.",
     "temperatures_too_high_custom": "Températures trop élevées ({temp_msg}), maximum: {max_temp:.1f}°C, report de l'extinction",
-    "print_in_progress_moonraker": "Impression en cours détectée via Moonraker (état: {state}), annulation de l'extinction"
+    "print_in_progress_moonraker": "Impression en cours détectée via Moonraker (état: {state}), annulation de l'extinction",
+    "error_checking_mcu_status": "Erreur lors de la vérification de l'état du MCU : {error}",
+    "mcu_object_not_found": "Objet MCU non trouvé",
+    "mcu_shutdown_disconnected": "Le MCU est éteint ou déconnecté",
+    "error_disabling_heaters": "Erreur lors de la désactivation des chauffages : {error}",
+    "error_preparing_shutdown": "Erreur lors de la préparation de l'extinction : {error}",
+    "shutdown_in_progress": "Une extinction est déjà en cours, commande ignorée",
+    "printer_already_shutdown": "L'imprimante est déjà éteinte, abandon de la procédure d'extinction"
 }

@@ -608,16 +608,16 @@ class AutoPowerOff:
             # Tentative de vérification de l'état du MCU / Attempt to check MCU status
             mcu = self.printer.lookup_object('mcu', None)
             if mcu is None:
-                self._diagnostic_log("MCU object not found", level="warning")
+                self._diagnostic_log(self.get_text("mcu_object_not_found"), level="warning")
                 return False
             if mcu.is_shutdown():
-                self._diagnostic_log("MCU is shutdown or disconnected", level="warning")
+                self._diagnostic_log(self.get_text("mcu_shutdown_disconnected"), level="warning")
                 return False
             return True
         except Exception as e:
-            self._diagnostic_log(f"Error while checking MCU status: {str(e)}", level="warning")
+            self._diagnostic_log(self.get_text("error_checking_mcu_status", error=str(e)), level="warning")
             return False
-        
+
     def _prepare_mcu_for_shutdown(self):
         """
         Prépare le MCU pour une extinction propre
@@ -626,8 +626,15 @@ class AutoPowerOff:
         try:
             # Éviter les actions redondantes / Avoid redundant actions
             if hasattr(self, '_shutdown_in_progress') and self._shutdown_in_progress:
+                self.logger.info(self.get_text("shutdown_in_progress"))
                 return
                 
+            # Vérifier si l'imprimante est déjà arrêtée
+            # Check if printer is already shutdown
+            if self.printer.is_shutdown():
+                self.logger.warning(self.get_text("printer_already_shutdown"))
+                return
+                    
             self._shutdown_in_progress = True
             self._diagnostic_log("Préparation du MCU pour l'extinction", level="info")
             
@@ -640,10 +647,10 @@ class AutoPowerOff:
                 import time
                 time.sleep(0.5)
             except Exception as e:
-                self._diagnostic_log(f"Erreur lors de la désactivation des chauffages: {str(e)}", 
+                self._diagnostic_log(self.get_text("error_disabling_heaters", error=str(e)), 
                                     level="warning")
         except Exception as e:
-            self._diagnostic_log(f"Erreur lors de la préparation pour l'extinction: {str(e)}", 
+            self._diagnostic_log(self.get_text("error_preparing_shutdown", error=str(e)), 
                                 level="warning")
     
     def _power_off(self, force_direct=False, diagnostic_mode=None):
