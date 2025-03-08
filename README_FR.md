@@ -288,6 +288,20 @@ Consultez la [documentation de Moonraker](https://moonraker.readthedocs.io/en/la
 
 ### Problèmes courants et solutions
 
+#### Implémentation basée sur CURL
+
+À partir de la version X.X.X, le module Auto Power Off utilise la commande CURL pour les communications avec l'API Moonraker plutôt que des bibliothèques Python comme requests ou urllib. Cela améliore la compatibilité et la fiabilité, évitant les problèmes de dépendances externes.
+
+Si vous rencontrez des problèmes de communication avec Moonraker, vérifiez que la commande CURL est disponible sur votre système :
+```bash
+which curl
+```
+
+Si CURL n'est pas installé, vous pouvez l'installer avec :
+```bash
+sudo apt-get install curl
+```
+
 #### Périphérique d'alimentation non trouvé
 
 Si vous voyez une erreur comme "Périphérique d'alimentation 'psu_control' introuvable" :

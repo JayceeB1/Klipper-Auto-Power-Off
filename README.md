@@ -290,6 +290,20 @@ See the [Moonraker documentation](https://moonraker.readthedocs.io/en/latest/con
 
 ### Common Problems and Solutions
 
+#### CURL-based implementation
+
+Starting with version X.X.X, the Auto Power Off module uses the CURL command for communication with the Moonraker API instead of Python libraries like requests or urllib. This improves compatibility and reliability, avoiding external dependency issues.
+
+If you have problems communicating with Moonraker, check that the CURL command is available on your system:
+```bash
+which curl
+```
+
+If CURL is not installed, you can install it with:
+```bash
+sudo apt-get install curl
+```
+
 #### Power Device Not Found
 
 If you see an error like "Power device 'psu_control' not found":
