@@ -17,7 +17,7 @@ fi
 if [ -f "$MODULE_PATH" ]; then
     VERSION=$(grep -o "__version__ = \"[0-9.]*\"" "$MODULE_PATH" | cut -d'"' -f2)
 else
-    VERSION="2.0.2" # Default version if not found
+    VERSION="2.0.4" # Default version if not found
 fi
 
 # Colors for messages
@@ -28,22 +28,114 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Repository information
-REPO_URL="https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main"
-REPO_GIT="https://github.com/JayceeB1/klipper-auto-power-off.git"
+REPO_URL="https://raw.githubusercontent.com/JayceeB1/Klipper-Auto-Power-Off/main"
+REPO_GIT="https://github.com/JayceeB1/Klipper-Auto-Power-Off.git"
+
+# Fonction pour redémarrer Moonraker
+restart_moonraker() {
+    if [ -t 0 ]; then
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            read -p "Voulez-vous redémarrer Moonraker maintenant pour appliquer les changements? [o/N] " RESTART_MOONRAKER
+        else
+            read -p "Do you want to restart Moonraker now to apply the changes? [y/N] " RESTART_MOONRAKER
+        fi
+        
+        if [[ "$RESTART_MOONRAKER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
+            print_status "$MSG_MOONRAKER_RESTARTING"
+            sudo systemctl restart moonraker
+            
+            echo "$MSG_WAIT_MOONRAKER"
+            sleep 5
+            
+            # Vérification du redémarrage réussi
+            if sudo systemctl is-active --quiet moonraker; then
+                print_success "$MSG_MOONRAKER_RESTARTED"
+            else
+                print_warning "$MSG_MOONRAKER_RESTART_FAILED"
+                echo "$MSG_MOONRAKER_RESTART_CMD"
+            fi
+        else
+            if [ "$LANG_CHOICE" = "fr" ]; then
+                print_warning "Moonraker n'a pas été redémarré. Veuillez le redémarrer manuellement pour appliquer les changements."
+            else
+                print_warning "Moonraker was not restarted. Please restart it manually to apply the changes."
+            fi
+            echo "$MSG_MOONRAKER_RESTART_CMD"
+        fi
+    else
+        # En mode non interactif, on redémarre automatiquement
+        print_status "$MSG_MOONRAKER_RESTARTING"
+        sudo systemctl restart moonraker
+        print_success "$MSG_MOONRAKER_RESTARTED"
+    fi
+}
+
+# Fonction pour détecter automatiquement les chemins principaux
+detect_paths() {
+    # Détection du répertoire Klipper
+    if [ -z "$KLIPPER_PATH" ]; then
+        for p in ~/klipper /home/*/klipper; do
+            if [ -d "$p" ]; then
+                KLIPPER_PATH="$p"
+                break
+            fi
+        done
+    fi
+    
+    # Détection automatique du répertoire de configuration
+    if [ -z "$PRINTER_CONFIG_DIR" ]; then
+        for p in ~/printer_data/config ~/klipper_config /home/*/printer_data/config /home/*/klipper_config; do
+            if [ -d "$p" ]; then
+                PRINTER_CONFIG_DIR="$p"
+                break
+            fi
+        done
+    fi
+    
+    # Détection du chemin de moonraker.conf
+    if [ -z "$MOONRAKER_CONF" ]; then
+        for p in "$PRINTER_CONFIG_DIR/moonraker.conf" /home/*/printer_data/config/moonraker.conf /home/*/klipper_config/moonraker.conf; do
+            if [ -f "$p" ]; then
+                MOONRAKER_CONF="$p"
+                break
+            fi
+        done
+    fi
+    
+    # Détection du dépôt auto_power_off existant
+    for p in ~/auto_power_off /home/*/auto_power_off; do
+        if [ -d "$p" ]; then
+            DEFAULT_REPO_PATH="$p"
+            break
+        fi
+    done
+}
 
 # Installation paths
-KLIPPER_PATH="${HOME}/klipper"
-MODULE_PATH="${KLIPPER_PATH}/klippy/extras/auto_power_off.py"
-LANGS_PATH="${KLIPPER_PATH}/klippy/extras/auto_power_off_langs"
+KLIPPER_PATH=""
+MODULE_PATH=""
+LANGS_PATH=""
+PRINTER_CONFIG_DIR=""
+MOONRAKER_CONF=""
 
 # Default repo path for update manager
-DEFAULT_REPO_PATH="${HOME}/auto_power_off"
+DEFAULT_REPO_PATH=""
 
-# Detect if this is an update
-if [ -f "${MODULE_PATH}" ]; then
-    UPDATE_MODE=true
+# Détecter les chemins automatiquement
+detect_paths
+
+# Finaliser les chemins après détection
+if [ -n "$KLIPPER_PATH" ]; then
+    MODULE_PATH="${KLIPPER_PATH}/klippy/extras/auto_power_off.py"
+    LANGS_PATH="${KLIPPER_PATH}/klippy/extras/auto_power_off_langs"
 else
-    UPDATE_MODE=false
+    KLIPPER_PATH="${HOME}/klipper"
+    MODULE_PATH="${KLIPPER_PATH}/klippy/extras/auto_power_off.py"
+    LANGS_PATH="${KLIPPER_PATH}/klippy/extras/auto_power_off_langs"
+fi
+
+if [ -z "$DEFAULT_REPO_PATH" ]; then
+    DEFAULT_REPO_PATH="${HOME}/auto_power_off"
 fi
 
 # Function to display formatted messages in the selected language
@@ -108,21 +200,20 @@ add_update_manager_config() {
             print_status "Removing old update manager configuration"
         fi
         
-        # Utiliser sed pour supprimer toute la section [update_manager auto_power_off]
-        sed -i '/\[update_manager auto_power_off\]/,/^\[/s/\[update_manager auto_power_off\]/# REMOVED auto_power_off/g' "$moonraker_conf"
-        # Nettoyer les lignes restantes de l'ancienne configuration
-        sed -i '/^type: git_repo/d' "$moonraker_conf"
-        sed -i '/^path: .*auto_power_off/d' "$moonraker_conf"
-        sed -i '/^origin: .*klipper-auto-power-off/d' "$moonraker_conf"
-        sed -i '/^primary_branch: main/d' "$moonraker_conf"
-        sed -i '/^install_script: scripts\/install.sh/d' "$moonraker_conf"
-        sed -i '/^managed_services: klipper/d' "$moonraker_conf"
+        # Supprimer toute la section [update_manager auto_power_off] et ses attributs
+        # Cette approche est plus robuste, car elle supprime également les anciennes URLs incorrectes
+        awk '
+        BEGIN { skip=0; }
+        /^\[update_manager auto_power_off\]/ { skip=1; next; }
+        /^\[/ { if (skip) { skip=0; } }
+        { if (!skip) print; }
+        ' "$moonraker_conf" > "${moonraker_conf}.tmp" && mv "${moonraker_conf}.tmp" "$moonraker_conf"
         
         # Supprimer les lignes vides consécutives qui peuvent rester
         sed -i '/^$/N;/^\n$/D' "$moonraker_conf"
     fi
     
-    # Ajout de la configuration avec gestion multilingue
+    # Ajout de la configuration avec gestion multilingue et URL correcte (sensible à la casse)
     cat >> "$moonraker_conf" << EOL
 
 # Configuration de mise à jour pour Auto Power Off / Update manager configuration for Auto Power Off
@@ -150,46 +241,73 @@ setup_git_repo() {
     local username="$2"
     local email="$3"
     
-    # Create repo directory if needed
-    mkdir -p "$repo_dir"
-    mkdir -p "$repo_dir/scripts"
-    mkdir -p "$repo_dir/src/auto_power_off_langs"
-    mkdir -p "$repo_dir/ui/fluidd"
-    mkdir -p "$repo_dir/ui/mainsail"
+    # Vérifier si le dossier de destination existe déjà
+    if [ -d "$repo_dir" ]; then
+        # Si un dépôt Git existe déjà, on le nettoie et on met à jour sa configuration
+        if [ -d "$repo_dir/.git" ]; then
+            cd "$repo_dir" || exit 1
+            
+            # Sauvegarde des fichiers modifiés si nécessaire
+            if [ "$(git status --porcelain | wc -l)" -gt 0 ]; then
+                if [ "$LANG_CHOICE" = "fr" ]; then
+                    print_status "Sauvegarde des fichiers modifiés..."
+                else
+                    print_status "Backing up modified files..."
+                fi
+                mkdir -p /tmp/auto_power_off_backup
+                git status --porcelain | grep -v '??' | awk '{print $2}' | xargs -I{} cp --parents {} /tmp/auto_power_off_backup/
+            fi
+            
+            # Supprimer l'ancienne configuration remote
+            git remote remove origin 2>/dev/null || true
+            
+            # Ajouter la nouvelle remote avec l'URL correcte (sensible à la casse)
+            git remote add origin "${REPO_GIT}"
+            
+            # Configurer git user si nécessaire
+            if ! git config --get user.name > /dev/null; then
+                git config user.name "$username"
+            fi
+            
+            if ! git config --get user.email > /dev/null; then
+                git config user.email "$email"
+            fi
+            
+            # Ajouter le dépôt aux dossiers sécurisés
+            git config --global --add safe.directory "$repo_dir"
+            
+            if [ "$LANG_CHOICE" = "fr" ]; then
+                print_status "Dépôt Git mis à jour à $repo_dir"
+            else
+                print_status "Git repository updated at $repo_dir"
+            fi
+            
+            return 0
+        else
+            # Si le dossier existe mais ce n'est pas un dépôt Git, on le supprime
+            rm -rf "$repo_dir"
+        fi
+    fi
     
-    # Enter repo directory for git operations
+    # Cloner directement le dépôt au lieu de créer un dossier vide
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        print_status "Clonage du dépôt Git à $repo_dir"
+    else
+        print_status "Cloning Git repository to $repo_dir"
+    fi
+    
+    # Utiliser la bonne URL avec les majuscules
+    git clone "${REPO_GIT}" "$repo_dir"
+    
+    # Entrer dans le dossier du dépôt
     cd "$repo_dir" || exit 1
     
-    # Initialize git repo if not already initialized
-    if [ ! -d ".git" ]; then
-        git init
-        if [ "$LANG_CHOICE" = "fr" ]; then
-            print_status "Initialisation du dépôt Git à $repo_dir"
-        else
-            print_status "Initializing Git repository at $repo_dir"
-        fi
-    else
-        if [ "$LANG_CHOICE" = "fr" ]; then
-            print_status "Dépôt Git déjà initialisé à $repo_dir"
-        else
-            print_status "Git repository already initialized at $repo_dir"
-        fi
-    fi
+    # Configurer git user
+    git config user.name "$username"
+    git config user.email "$email"
     
-    # Configure git user if not already configured
-    if ! git config --get user.name > /dev/null; then
-        git config user.name "$username"
-    fi
-    
-    if ! git config --get user.email > /dev/null; then
-        git config user.email "$email"
-    fi
-    
-    # Add repository to git safe directories (fixes permission issues)
+    # Ajouter le dépôt aux dossiers sécurisés
     git config --global --add safe.directory "$repo_dir"
-    
-    # Clean repository of potential untracked files
-    git clean -fd
     
     return 0
 }
@@ -459,19 +577,6 @@ mkdir -p ~/klipper/klippy/extras/auto_power_off_langs
 print_success "$MSG_EXTRAS_CHECKED"
 
 # Auto-detect configuration path
-PRINTER_CONFIG_DIR=""
-POSSIBLE_PATHS=(
-    "$HOME/printer_data/config" 
-    "$HOME/klipper_config"
-)
-
-for path in "${POSSIBLE_PATHS[@]}"; do
-    if [ -d "$path" ]; then
-        PRINTER_CONFIG_DIR="$path"
-        break
-    fi
-done
-
 if [ -z "$PRINTER_CONFIG_DIR" ]; then
     print_error "$MSG_CONFIG_NOT_FOUND"
     echo "$MSG_ENTER_PATH"
@@ -480,6 +585,35 @@ if [ -z "$PRINTER_CONFIG_DIR" ]; then
     if [ ! -d "$PRINTER_CONFIG_DIR" ]; then
         print_error "$MSG_DIR_NOT_EXISTS"
         exit 1
+    fi
+else
+    # Confirmer le chemin détecté automatiquement
+    if [ -t 0 ]; then
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            print_status "Répertoire de configuration détecté: $PRINTER_CONFIG_DIR"
+            read -p "Est-ce correct? [O/n]: " confirm_path
+            if [[ "$confirm_path" =~ ^[Nn] ]]; then
+                print_status "Veuillez entrer le chemin correct:"
+                read -r PRINTER_CONFIG_DIR
+                
+                if [ ! -d "$PRINTER_CONFIG_DIR" ]; then
+                    print_error "$MSG_DIR_NOT_EXISTS"
+                    exit 1
+                fi
+            fi
+        else
+            print_status "Configuration directory detected: $PRINTER_CONFIG_DIR"
+            read -p "Is this correct? [Y/n]: " confirm_path
+            if [[ "$confirm_path" =~ ^[Nn] ]]; then
+                print_status "Please enter the correct path:"
+                read -r PRINTER_CONFIG_DIR
+                
+                if [ ! -d "$PRINTER_CONFIG_DIR" ]; then
+                    print_error "$MSG_DIR_NOT_EXISTS"
+                    exit 1
+                fi
+            fi
+        fi
     fi
 fi
 
@@ -630,60 +764,111 @@ EOL
     fi
 fi
 
-# Setup for Moonraker update manager
 ADD_MOONRAKER=""
 
-# Always assume YES for update mode
-if [ "$UPDATE_MODE" = true ]; then
-    ADD_MOONRAKER="y"
-elif [ -t 0 ]; then
-    # Ask in interactive mode for new installations
-    echo "$MSG_ADD_MOONRAKER"
-    read -r ADD_MOONRAKER
-fi
-
-if [[ "$ADD_MOONRAKER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
-    # Ask for moonraker.conf path
-    MOONRAKER_DEFAULT="$PRINTER_CONFIG_DIR/moonraker.conf"
-    echo "$MSG_MOONRAKER_PATH"
-    read -r MOONRAKER_PATH
-    
-    if [ -z "$MOONRAKER_PATH" ]; then
-        MOONRAKER_PATH="$MOONRAKER_DEFAULT"
+# Configure and handle moonraker.conf
+if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
+    if [ "$UPDATE_MODE" = true ]; then
+        # Définir une valeur par défaut en mode mise à jour
+        ADD_MOONRAKER="y"
     fi
     
-    # Ask for repository path
-    echo "$MSG_REPO_PATH"
-    read -r REPO_PATH
-    
-    if [ -z "$REPO_PATH" ]; then
-        REPO_PATH="$DEFAULT_REPO_PATH"
+    if [ -z "$ADD_MOONRAKER" ] && [ -t 0 ]; then
+        if [ -z "$MOONRAKER_CONF" ]; then
+            # Demander le chemin de moonraker.conf
+            if [ "$LANG_CHOICE" = "fr" ]; then
+                echo "$MSG_MOONRAKER_PATH"
+            else
+                echo "$MSG_MOONRAKER_PATH"
+            fi
+            read -r MOONRAKER_CONF
+            
+            if [ -z "$MOONRAKER_CONF" ]; then
+                MOONRAKER_CONF="$PRINTER_CONFIG_DIR/moonraker.conf"
+            fi
+        else
+            # Confirmer le fichier moonraker.conf détecté
+            if [ "$LANG_CHOICE" = "fr" ]; then
+                print_status "Fichier moonraker.conf détecté: $MOONRAKER_CONF"
+                read -p "Est-ce correct? [O/n]: " confirm_moonraker
+                if [[ "$confirm_moonraker" =~ ^[Nn] ]]; then
+                    print_status "Veuillez entrer le chemin correct:"
+                    read -r MOONRAKER_CONF
+                fi
+            else
+                print_status "Moonraker.conf file detected: $MOONRAKER_CONF"
+                read -p "Is this correct? [Y/n]: " confirm_moonraker
+                if [[ "$confirm_moonraker" =~ ^[Nn] ]]; then
+                    print_status "Please enter the correct path:"
+                    read -r MOONRAKER_CONF
+                fi
+            fi
+        fi
+        
+        # Demander si l'utilisateur veut mettre à jour la configuration Moonraker
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            read -p "$MSG_ADD_MOONRAKER" ADD_MOONRAKER
+        else
+            read -p "$MSG_ADD_MOONRAKER" ADD_MOONRAKER
+        fi
     fi
     
-    # Create repository directory structure
-    print_status "$MSG_CREATING_REPO"
-    
-    # Check if repo directory exists
-    if [ -d "$REPO_PATH" ]; then
-        print_status "$MSG_REPO_EXISTS"
-    else
-        mkdir -p "$REPO_PATH"
+    if [[ "$ADD_MOONRAKER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
+        # Demander le chemin du dépôt si pas encore défini
+        if [ -z "$REPO_PATH" ]; then
+            # Confirmer le dépôt local détecté
+            if [ -n "$DEFAULT_REPO_PATH" ] && [ -t 0 ]; then
+                if [ "$LANG_CHOICE" = "fr" ]; then
+                    print_status "Dépôt local détecté: $DEFAULT_REPO_PATH"
+                    read -p "Est-ce correct? [O/n]: " confirm_repo
+                    if [[ "$confirm_repo" =~ ^[Nn] ]]; then
+                        print_status "Veuillez entrer le chemin correct:"
+                        read -r REPO_PATH
+                    else
+                        REPO_PATH="$DEFAULT_REPO_PATH"
+                    fi
+                else
+                    print_status "Local repository detected: $DEFAULT_REPO_PATH"
+                    read -p "Is this correct? [Y/n]: " confirm_repo
+                    if [[ "$confirm_repo" =~ ^[Nn] ]]; then
+                        print_status "Please enter the correct path:"
+                        read -r REPO_PATH
+                    else
+                        REPO_PATH="$DEFAULT_REPO_PATH"
+                    fi
+                fi
+            else
+                echo "$MSG_REPO_PATH"
+                read -r REPO_PATH
+                
+                if [ -z "$REPO_PATH" ]; then
+                    REPO_PATH="$DEFAULT_REPO_PATH"
+                fi
+            fi
+        fi
+        
+        # Set up repository
+        print_status "$MSG_CREATING_REPO"
+        
+        # Set up git user info
+        GIT_USERNAME="$(whoami)"
+        GIT_EMAIL="$GIT_USERNAME@$(hostname)"
+        
+        # Initialize git repository
+        setup_git_repo "$REPO_PATH" "$GIT_USERNAME" "$GIT_EMAIL"
+        
+        # Copy files to repo and track them in git
+        copy_and_track_files "$REPO_PATH" "$MODULE_PATH" "$LANGS_PATH" "$PRINTER_CONFIG_DIR"
+        
+        print_success "$MSG_REPO_CREATED"
+        
+        
+        # Add to moonraker.conf
+        add_update_manager_config "$MOONRAKER_CONF" "$REPO_PATH"
+        
+        # Redémarrer Moonraker pour appliquer les changements
+        restart_moonraker
     fi
-    
-    # Set up git user info
-    GIT_USERNAME="$(whoami)"
-    GIT_EMAIL="$GIT_USERNAME@$(hostname)"
-    
-    # Initialize git repository
-    setup_git_repo "$REPO_PATH" "$GIT_USERNAME" "$GIT_EMAIL"
-    
-    # Copy files to repo and track them in git
-    copy_and_track_files "$REPO_PATH" "$MODULE_PATH" "$LANGS_PATH" "$PRINTER_CONFIG_DIR"
-    
-    print_success "$MSG_REPO_CREATED"
-    
-    # Add to moonraker.conf
-    add_update_manager_config "$MOONRAKER_PATH" "$REPO_PATH"
 fi
 
 # Ask user if they want to restart Klipper

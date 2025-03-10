@@ -123,7 +123,7 @@ As of the latest version, Auto Power Off works primarily through Moonraker's pow
    [update_manager auto_power_off]
    type: git_repo
    path: ~/auto_power_off
-   origin: https://github.com/JayceeB1/klipper-auto-power-off.git
+   origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
    primary_branch: main
    install_script: scripts/install.sh
    managed_services: klipper
@@ -182,7 +182,7 @@ The following configuration will be added to your `moonraker.conf`:
 [update_manager auto_power_off]
 type: git_repo
 path: ~/auto_power_off
-origin: https://github.com/JayceeB1/klipper-auto-power-off.git
+origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
 primary_branch: main
 install_script: scripts/install.sh
 managed_services: klipper

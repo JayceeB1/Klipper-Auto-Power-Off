@@ -5,6 +5,14 @@ All notable changes to the Klipper Auto Power Off project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2025-03-11
+
+### Fixed
+Important Note for Versions Before 2.0.4
+
+If you're using a version before 2.0.4 and experiencing auto-update issues, please be aware that there was a case-sensitivity issue with the GitHub repository URL. The correct URL is https://github.com/JayceeB1/Klipper-Auto-Power-Off.git (with capital K). 
+The latest install script will automatically fix this issue.
+
 ## [2.0.3] - 2025-03-10
 
 ### Fixed

@@ -122,7 +122,7 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
    [update_manager auto_power_off]
    type: git_repo
    path: ~/auto_power_off
-   origin: https://github.com/JayceeB1/klipper-auto-power-off.git
+   origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
    primary_branch: main
    install_script: scripts/install.sh
    managed_services: klipper
@@ -181,7 +181,7 @@ La configuration suivante sera ajoutée à votre `moonraker.conf` :
 [update_manager auto_power_off]
 type: git_repo
 path: ~/auto_power_off
-origin: https://github.com/JayceeB1/klipper-auto-power-off.git
+origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
 primary_branch: main
 install_script: scripts/install.sh
 managed_services: klipper
