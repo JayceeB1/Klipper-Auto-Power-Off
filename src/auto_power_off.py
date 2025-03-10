@@ -12,7 +12,7 @@ import socket
 from enum import Enum, auto
 from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Set, TypeVar, Generic, Type, cast
 
-__version__ = "2.0.0"  # Module version for update checking
+__version__ = "2.0.1"  # Module version for update checking
 
 # Définition des énumérations pour les états et méthodes
 class PowerOffMethod(Enum):

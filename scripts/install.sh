@@ -71,6 +71,7 @@ add_update_manager_config() {
     local moonraker_conf="$1"
     local repo_path="$2"
     
+    # Vérification du fichier de configuration
     if [ ! -f "$moonraker_conf" ]; then
         if [ "$LANG_CHOICE" = "fr" ]; then
             print_warning "Fichier moonraker.conf non trouvé à $moonraker_conf"
@@ -82,19 +83,53 @@ add_update_manager_config() {
         return 1
     fi
     
-    # Check if section already exists
-    if grep -q "\[update_manager auto_power_off\]" "$moonraker_conf"; then
+    # Vérification des sections existantes
+    local sections_to_check=(
+        "\[update_manager\s*auto_power_off\]"
+        "path:\s*${repo_path}"
+        "origin:\s*${REPO_GIT}"
+    )
+    
+    local all_exist=true
+    for section in "${sections_to_check[@]}"; do
+        if ! grep -qE "$section" "$moonraker_conf"; then
+            all_exist=false
+            break
+        fi
+    done
+    
+    # Si toutes les sections existent, ne rien faire
+    if [ "$all_exist" = true ]; then
         if [ "$LANG_CHOICE" = "fr" ]; then
-            print_warning "Configuration de mise à jour déjà présente dans moonraker.conf"
+            print_warning "Configuration de mise à jour déjà complète dans moonraker.conf"
         else
-            print_warning "Update manager configuration already exists in moonraker.conf"
+            print_warning "Update manager configuration already complete in moonraker.conf"
         fi
         return 0
     fi
     
-    # Add update manager configuration
+    # Demander confirmation avant d'ajouter
+    if [ -t 0 ]; then
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            read -p "La configuration du gestionnaire de mise à jour est incomplète. Voulez-vous l'ajouter ? [o/N] " response
+        else
+            read -p "Update manager configuration is incomplete. Do you want to add it? [y/N] " response
+        fi
+        
+        if [[ ! "$response" =~ ^[Oo\Yy]$ ]]; then
+            if [ "$LANG_CHOICE" = "fr" ]; then
+                print_warning "Configuration non ajoutée"
+            else
+                print_warning "Configuration not added"
+            fi
+            return 0
+        fi
+    fi
+    
+    # Ajout de la configuration avec gestion multilingue
     cat >> "$moonraker_conf" << EOL
 
+# Configuration de mise à jour pour Auto Power Off / Update manager configuration for Auto Power Off
 [update_manager auto_power_off]
 type: git_repo
 path: ${repo_path}
@@ -109,6 +144,7 @@ EOL
     else
         print_success "Update manager configuration added to moonraker.conf"
     fi
+    
     return 0
 }
 
