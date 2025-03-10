@@ -5,6 +5,22 @@ All notable changes to the Klipper Auto Power Off project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.5] - 2025-03-11
+
+### Added
+* Git version detection system to avoid "inferred" versions
+* Version exposure in status API for Fluidd/Mainsail interfaces
+* Automatic recovery function for corrupted Git repositories
+
+### Fixed
+* Correction of case-sensitivity issues in Git repository URLs
+* Improved error handling for divergent repository recovery
+* Automatic repair of incorrect repository references
+
+### Improved
+* More detailed diagnostics for Git repository issues
+* Better version persistence between restarts
+
 ## [2.0.4] - 2025-03-11
 
 ### Fixed

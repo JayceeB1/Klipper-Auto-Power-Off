@@ -12,7 +12,7 @@ import socket
 from enum import Enum, auto
 from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Set, TypeVar, Generic, Type, cast
 
-__version__ = "2.0.4"  # Module version for update checking
+__version__ = "2.0.5"  # Module version for update checking
 
 # Définition des énumérations pour les états et méthodes
 class PowerOffMethod(Enum):
@@ -150,6 +150,40 @@ class AutoPowerOff:
 
         # Register for Fluidd/Mainsail status API / Enregistrement pour l'API de status Fluidd/Mainsail
         self.printer.register_event_handler("klippy:connect", self._handle_connect)
+
+    def get_git_version(self) -> str:
+        """
+        Récupère la version à partir de Git si disponible.
+        Évite les problèmes de 'inferred version'.
+        
+        Returns:
+            str: Numéro de version Git ou version par défaut
+        """
+        try:
+            # Vérifier si nous sommes dans un dépôt Git
+            repo_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+            git_dir = os.path.join(repo_dir, ".git")
+            
+            if os.path.isdir(git_dir):
+                # Essayer d'obtenir la version depuis le tag Git
+                try:
+                    with open(os.path.join(git_dir, "HEAD"), 'r') as f:
+                        head_ref = f.read().strip()
+                    
+                    # Si le HEAD pointe vers une référence
+                    if head_ref.startswith("ref:"):
+                        ref_path = head_ref[5:].strip()
+                        ref_file = os.path.join(git_dir, ref_path)
+                        
+                        if os.path.isfile(ref_file):
+                            with open(ref_file, 'r') as f:
+                                return f"v{__version__}-{f.read().strip()[:7]}"
+                except:
+                    pass
+            
+            return f"v{__version__}"
+        except:
+            return f"v{__version__}"
 
     def _configure_language(self, config) -> None:
         """
@@ -1294,6 +1328,8 @@ class AutoPowerOff:
             dict: Status information for the UI
         """
         time_left = max(0, self.countdown_end - self.reactor.monotonic()) if self.shutdown_timer is not None else 0
+
+        git_version = self.get_git_version()
         
         return {
             'enabled': self.enabled,
@@ -1308,7 +1344,8 @@ class AutoPowerOff:
             'dry_run_mode': self.dry_run_mode,
             'optimal_method': self.optimal_method.name if self.optimal_method else None,
             'device_capabilities': self.device_capabilities,
-            'state': self.state
+            'state': self.state,
+            'version': git_version 
         }
 
     cmd_AUTO_POWEROFF_help = "Configure or trigger automatic printer power off / Configure ou déclenche l'extinction automatique de l'imprimante"
