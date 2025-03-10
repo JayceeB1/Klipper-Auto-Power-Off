@@ -1,108 +1,184 @@
 # auto_power_off.py
 # Automatic power off script for 3D printers running Klipper / Script d'extinction automatique pour imprimante 3D sous Klipper
 # Place in ~/klipper/klippy/extras/ folder / À placer dans le dossier ~/klipper/klippy/extras/
-# Utilise CURL pour les communications avec Moonraker / Uses CURL for Moonraker communications
 
 import logging
 import threading
 import time
 import os
 import json
-# Remarque: requests n'est plus utilisé, utilisation de subprocess et curl à la place
-# Note: requests is no longer used, using subprocess and curl instead
+import subprocess
+import socket
+from enum import Enum, auto
+from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Set, TypeVar, Generic, Type, cast
+
+__version__ = "2.0.0"  # Module version for update checking
+
+# Définition des énumérations pour les états et méthodes
+class PowerOffMethod(Enum):
+    """Available methods to power off the power device / Méthodes disponibles pour éteindre le périphérique d'alimentation"""
+    SET_POWER = auto()  # Utilise la méthode set_power(0)
+    TURN_OFF = auto()   # Utilise la méthode turn_off()
+    POWER_OFF = auto()  # Utilise la méthode power_off()
+    CMD_OFF = auto()    # Utilise la commande GCODE POWER_OFF
+    MOONRAKER = auto()  # Utilise l'API Moonraker
+    UNKNOWN = auto()    # Méthode inconnue ou non déterminée
+
+class DeviceState(Enum):
+    """Possible states of the power device / États possibles du périphérique d'alimentation"""
+    AVAILABLE = auto()    # Périphérique disponible
+    UNAVAILABLE = auto()  # Périphérique indisponible
+    ERROR = auto()        # Erreur avec le périphérique
+
+class PrinterState(Enum):
+    """Possible printer states / États possibles de l'imprimante"""
+    IDLE = auto()        # Imprimante inactive
+    PRINTING = auto()    # Impression en cours
+    PAUSED = auto()      # Impression en pause
+    BUSY = auto()        # Imprimante occupée (mais pas en impression)
+    SHUTDOWN = auto()    # Imprimante arrêtée
+    UNKNOWN = auto()     # État inconnu
+
+class Language(Enum):
+    """Supported languages / Langues supportées"""
+    ENGLISH = "en"
+    FRENCH = "fr"
+    # Ajouter de nouvelles langues ici
+
+# Définition des exceptions personnalisées
+class PowerOffError(Exception):
+    """Base exception for power off errors / Exception de base pour les erreurs d'extinction"""
+    pass
+
+class PowerDeviceError(PowerOffError):
+    """Exception for errors related to the power device / Exception pour les erreurs liées au périphérique d'alimentation"""
+    pass
+
+class PowerDeviceNotFoundError(PowerDeviceError):
+    """Exception raised when the power device is not found / Exception levée quand le périphérique d'alimentation est introuvable"""
+    pass
+
+class PowerDeviceNotAvailableError(PowerDeviceError):
+    """Exception raised when the power device is not available / Exception levée quand le périphérique d'alimentation n'est pas disponible"""
+    pass
+
+class NetworkDeviceError(PowerDeviceError):
+    """Exception for network device errors / Exception pour les erreurs de périphérique réseau"""
+    pass
+
+class NetworkDeviceUnreachableError(NetworkDeviceError):
+    """Exception raised when the network device is unreachable / Exception levée quand le périphérique réseau est injoignable"""
+    pass
+
+class MoonrakerApiError(PowerOffError):
+    """Exception for Moonraker API errors / Exception pour les erreurs d'API Moonraker"""
+    pass
+
+class TranslationError(Exception):
+    """Exception for translation errors / Exception pour les erreurs de traduction"""
+    pass
+
+class MCUError(PowerOffError):
+    """Exception for MCU-related errors / Exception pour les erreurs liées au MCU"""
+    pass
+
 
 class AutoPowerOff:
     def __init__(self, config):
-        # État du périphérique / Device state
-        self.device_available = False
-        self.device_capabilities = {}
-        self.optimal_method = None
-        self.force_direct = False
-        
+        # Device state / État du périphérique
+        self.device_state: DeviceState = DeviceState.UNAVAILABLE
+        self.device_capabilities: Dict[str, bool] = {}
+        self.optimal_method: Optional[PowerOffMethod] = None
+        self.force_direct: bool = False
+
         self.printer = config.get_printer()
         self.reactor = self.printer.get_reactor()
-        
+
         # Set up logging first / Configuration du logging en premier
         self.logger = logging.getLogger('auto_power_off')
         self.logger.setLevel(logging.INFO)
-        
+
         # Language configuration / Configuration de la langue
         self._configure_language(config)
-        
+
         # Load translations / Charger les traductions
         self._load_translations()
-        
+
         # Configuration parameters / Configuration des paramètres
-        self.idle_timeout = config.getfloat('idle_timeout', 600.0)  # Idle time in seconds (10 min default) / Temps d'inactivité en secondes (10 min par défaut)
-        self.temp_threshold = config.getfloat('temp_threshold', 40.0)  # Temperature threshold in °C / Seuil de température en °C
-        self.power_device = config.get('power_device', 'psu_control')  # Name of your power device / Le nom de votre périphérique d'alimentation
-        self.enabled = config.getboolean('auto_poweroff_enabled', False)  # Default enabled/disabled state / État activé/désactivé par défaut
-        self.moonraker_integration = config.getboolean('moonraker_integration', True)  # Moonraker integration / Intégration avec Moonraker
-        self.moonraker_url = config.get('moonraker_url', "http://localhost:7125")  # Moonraker URL / URL de Moonraker
+        self.idle_timeout: float = config.getfloat('idle_timeout', 600.0)  # Idle time in seconds (10 min default) / Temps d'inactivité en secondes (10 min par défaut)
+        self.temp_threshold: float = config.getfloat('temp_threshold', 40.0)  # Temperature threshold in °C / Seuil de température en °C
+        self.power_device: str = config.get('power_device', 'psu_control')  # Name of your power device / Nom du périphérique d'alimentation
+        self.enabled: bool = config.getboolean('auto_poweroff_enabled', False)  # Default enabled/disabled state / État activé/désactivé par défaut
+        self.moonraker_integration: bool = config.getboolean('moonraker_integration', True)  # Moonraker integration / Intégration avec Moonraker
+        self.moonraker_url: str = config.get('moonraker_url', "http://localhost:7125")  # Moonraker URL / URL de Moonraker
 
         # Diagnostic mode parameters / Paramètres du mode diagnostique
-        self.diagnostic_mode = config.getboolean('diagnostic_mode', False)  # Enable diagnostic logging / Activer la journalisation de diagnostic
-        self.power_off_retries = config.getint('power_off_retries', 3)  # Number of retry attempts / Nombre de tentatives
-        self.power_off_retry_delay = config.getint('power_off_retry_delay', 2)  # Delay between retries in seconds / Délai entre les tentatives en secondes
+        self.diagnostic_mode: bool = config.getboolean('diagnostic_mode', False)  # Enable diagnostic logging / Activer la journalisation de diagnostic
+        self.power_off_retries: int = config.getint('power_off_retries', 3)  # Number of retry attempts / Nombre de tentatives
+        self.power_off_retry_delay: int = config.getint('power_off_retry_delay', 2)  # Delay between retries in seconds / Délai entre les tentatives en secondes
 
         # Dry run mode / Mode simulation
-        self.dry_run_mode = config.getboolean('dry_run_mode', False)  # Default is real power off / Par défaut, extinction réelle   
+        self.dry_run_mode: bool = config.getboolean('dry_run_mode', False)  # Default is real power off / Par défaut, extinction réelle
 
         # Network device settings / Paramètres des périphériques réseau
-        self.network_device = config.getboolean('network_device', False)  # Is this a network power device / Est-ce un périphérique d'alimentation réseau
-        self.device_address = config.get('device_address', None)  # IP address or hostname / Adresse IP ou nom d'hôte
-        self.network_test_attempts = config.getint('network_test_attempts', 3)  # Number of attempts to test connectivity / Nombre de tentatives pour tester la connectivité
-        self.network_test_interval = config.getfloat('network_test_interval', 1.0)  # Interval between tests in seconds / Intervalle entre les tests en secondes
-            
-        # Register for events / S'enregistrer pour les événements
+        self.network_device: bool = config.getboolean('network_device', False)  # Is this a network power device / Est-ce un périphérique d'alimentation réseau
+        self.device_address: Optional[str] = config.get('device_address', None)  # IP address or hostname / Adresse IP ou nom d'hôte
+        self.network_test_attempts: int = config.getint('network_test_attempts', 3)  # Number of attempts to test connectivity / Nombre de tentatives pour tester la connectivité
+        self.network_test_interval: float = config.getfloat('network_test_interval', 1.0)  # Interval between tests in seconds / Intervalle entre les tests en secondes
+
+        # Register for events / Enregistrement pour les événements
         self.printer.register_event_handler("klippy:ready", self._handle_ready)
         self.printer.register_event_handler("print_stats:complete", self._handle_print_complete)
 
         # Monitored components configuration / Configuration des composants à surveiller
-        self.monitor_hotend = config.getboolean('monitor_hotend', True)
-        self.monitor_bed = config.getboolean('monitor_bed', True)
-        self.monitor_chamber = config.getboolean('monitor_chamber', False)
-            
-        # State variables / Variables d'état
-        self.shutdown_timer = None
-        self.is_checking_temp = False
-        self.countdown_end = 0
-        self.last_temps = {"hotend": 0, "bed": 0}
+        self.monitor_hotend: bool = config.getboolean('monitor_hotend', True)
+        self.monitor_bed: bool = config.getboolean('monitor_bed', True)
+        self.monitor_chamber: bool = config.getboolean('monitor_chamber', False)
 
-        # État du périphérique / Device state
-        self.device_available = False
-        self.device_capabilities = {}
-        self.optimal_method = None
-        self.force_direct = False
-        self._shutdown_in_progress = False  # Flag pour suivre l'état d'extinction / Flag to track shutdown state      
-        
-        # Register gcode commands / Enregistrement pour les commandes gcode
+        # State variables / Variables d'état
+        self.shutdown_timer: Optional[float] = None
+        self.is_checking_temp: bool = False
+        self.countdown_end: float = 0
+        self.last_temps: Dict[str, float] = {"hotend": 0, "bed": 0}
+        self._shutdown_in_progress: bool = False  # Flag to track shutdown state / Indicateur de suivi de l'état d'extinction
+        self.state: str = "init"  # État initial du module (init, on, off, error)
+
+        # Register gcode commands / Enregistrement des commandes GCODE
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command('AUTO_POWEROFF', self.cmd_AUTO_POWEROFF,
-                            desc=self.cmd_AUTO_POWEROFF_help)
-                            
+                               desc=self.cmd_AUTO_POWEROFF_help)
+
         # Register for Fluidd/Mainsail status API / Enregistrement pour l'API de status Fluidd/Mainsail
-        self.printer.register_event_handler("klippy:connect", 
-                                        self._handle_connect)
-    
-    def _configure_language(self, config):
+        self.printer.register_event_handler("klippy:connect", self._handle_connect)
+
+    def _configure_language(self, config) -> None:
         """
-        Configure language settings using multiple sources
-        Configure les paramètres de langue en utilisant plusieurs sources
+        Configure language settings using multiple sources.
+        
+        This method determines the language to use by checking in this order:
+        1. Explicit config parameter 'language'
+        2. Persistent language file
+        3. Environment variables (LANG, LANGUAGE, LC_ALL)
+        4. Klipper configuration files
+        5. Default to English if none of the above are available
+        
+        Args:
+            config: Klipper config object containing language settings
+            
+        Returns:
+            None
+        
+        Raises:
+            TranslationError: If there's an error loading translations
         """
-        # 1. Check explicit config parameter first (highest priority)
-        # 1. Vérifier d'abord le paramètre explicite (priorité la plus élevée)
         configured_lang = config.get('language', None)
         if configured_lang == 'auto':
             configured_lang = None
-        
-        # Get persistent language if saved / Récupérer la langue persistante si enregistrée
+
         persistent_lang = self._get_persistent_language()
-        
-        # 2. Check environment variables / Vérifier les variables d'environnement
+
         env_lang = None
         try:
-            # Check both LANG and LANGUAGE env vars / Vérifier les variables d'environnement LANG et LANGUAGE
             for env_var in ['LANG', 'LANGUAGE', 'LC_ALL']:
                 if env_var in os.environ and os.environ[env_var]:
                     env_value = os.environ[env_var].split('.')[0].lower()
@@ -114,82 +190,81 @@ class AutoPowerOff:
                         break
         except Exception as e:
             self.logger.warning(f"Error checking environment language: {str(e)}")
-            
-        # 3. Check Klipper config files / Vérifier les fichiers de configuration de Klipper
+
         klipper_lang = self._check_klipper_language_settings()
-        
-        # 4. Determine language with priority order / Déterminer la langue avec un ordre de priorité
         self.lang = configured_lang or persistent_lang or env_lang or klipper_lang or 'en'
         
-        # Validate and normalize language choice / Valider et normaliser le choix de langue
-        if self.lang.lower() not in ['en', 'fr']:
+        # Validate language against available languages
+        if self.lang.lower() not in [lang.value for lang in Language]:
             self.logger.warning(f"Unsupported language '{self.lang}'. Defaulting to English.")
-            self.lang = 'en'
+            self.lang = Language.ENGLISH.value
         else:
             self.lang = self.lang.lower()
-        
-        # Save language choice for persistence / Sauvegarder le choix de langue pour la persistance
+
         if configured_lang and configured_lang != persistent_lang:
             self._save_persistent_language(self.lang)
-        
-        # Log language detection process / Journaliser le processus de détection de langue
-        self.logger.info(f"Language detection: config={configured_lang}, "
-                        f"persistent={persistent_lang}, env={env_lang}, "
-                        f"klipper={klipper_lang}, final={self.lang}")
 
-    def _check_klipper_language_settings(self):
+        self.logger.info(f"Language detection: config={configured_lang}, persistent={persistent_lang}, env={env_lang}, klipper={klipper_lang}, final={self.lang}")
+
+    def _check_klipper_language_settings(self) -> Optional[str]:
         """
-        Check if there's any language preference in Klipper configuration files
-        Vérifie s'il y a une préférence de langue dans les fichiers de configuration de Klipper
+        Check for language preference in Klipper configuration files.
+        
+        This method looks for French configuration files in common paths
+        to determine if French should be used.
+        
+        Returns:
+            str or None: 'fr' if French configuration is detected, None otherwise
         """
         try:
-            # Try to check for common paths to French config files
-            # Essayer de vérifier les chemins courants des fichiers de configuration en français
             config_paths = [
                 "~/printer_data/config/mainsail/auto_power_off_fr.cfg",
                 "~/printer_data/config/fluidd/auto_power_off_fr.cfg",
                 "~/klipper_config/mainsail/auto_power_off_fr.cfg",
                 "~/klipper_config/fluidd/auto_power_off_fr.cfg"
             ]
-            
             for path in config_paths:
                 expanded_path = os.path.expanduser(path)
                 if os.path.exists(expanded_path):
-                    return 'fr'
+                    return Language.FRENCH.value
         except Exception as e:
             self.logger.warning(f"Error checking Klipper config: {str(e)}")
-        
         return None
 
-    def _get_persistent_language(self):
+    def _get_persistent_language(self) -> Optional[str]:
         """
-        Get saved language from persistence file
-        Obtenir la langue sauvegardée depuis le fichier de persistance
+        Get saved language from persistence file.
+        
+        Returns:
+            str or None: The language code if found in persistence file, None otherwise
         """
         try:
             persistence_file = os.path.expanduser("~/printer_data/config/auto_power_off_language.conf")
             if os.path.exists(persistence_file):
                 with open(persistence_file, 'r') as f:
                     saved_lang = f.read().strip()
-                    return saved_lang if saved_lang in ['en', 'fr'] else None
+                    return saved_lang if saved_lang in [lang.value for lang in Language] else None
         except Exception as e:
             self.logger.warning(f"Error reading persistent language: {str(e)}")
-        
         return None
 
-    def _save_persistent_language(self, language):
+    def _save_persistent_language(self, language: str) -> None:
         """
-        Save language preference to persistence file
-        Sauvegarder la préférence de langue dans le fichier de persistance
+        Save language preference to persistence file.
+        
+        Args:
+            language: The language code to save
+            
+        Returns:
+            None
         """
         try:
             persistence_dir = os.path.expanduser("~/printer_data/config")
             if not os.path.exists(persistence_dir):
                 persistence_dir = os.path.expanduser("~/klipper_config")
                 if not os.path.exists(persistence_dir):
-                    self.logger.warning("Could not find config directory for language persistence")
+                    self.logger.warning("Could not find config directory for language persistence / Répertoire de config introuvable pour la persistance de la langue")
                     return
-                    
             persistence_file = os.path.join(persistence_dir, "auto_power_off_language.conf")
             with open(persistence_file, 'w') as f:
                 f.write(language)
@@ -197,15 +272,23 @@ class AutoPowerOff:
         except Exception as e:
             self.logger.warning(f"Error saving language preference: {str(e)}")
 
-    def _check_device_capabilities(self):
+    def _check_device_capabilities(self) -> bool:
         """
-        Check and discover the capabilities of the power device
-        Vérifie et découvre les capacités du périphérique d'alimentation
-        """
-        if not self.device_available:
-            self._diagnostic_log("Cannot check capabilities, device not available", level="warning")
-            return
+        Check and discover the capabilities of the power device.
         
+        This method determines the available methods that can be used to power off
+        the device and selects the optimal method.
+        
+        Returns:
+            bool: True if device capabilities were successfully checked, False otherwise
+            
+        Raises:
+            PowerDeviceError: If there's an error checking device capabilities
+        """
+        if not self.device_state == DeviceState.AVAILABLE:
+            self._diagnostic_log("Cannot check capabilities, device not available / Impossible de vérifier les capacités, périphérique indisponible", level="warning")
+            return False
+
         self.device_capabilities = {
             'set_power': False,
             'turn_off': False,
@@ -213,183 +296,200 @@ class AutoPowerOff:
             'cmd_off': False,
             'moonraker_available': self.moonraker_integration
         }
-        
         try:
             device_name = f'power {self.power_device}'
             power_device = self.printer.lookup_object(device_name)
-            
-            # Check available methods / Vérifier les méthodes disponibles
             self.device_capabilities['set_power'] = hasattr(power_device, 'set_power')
             self.device_capabilities['turn_off'] = hasattr(power_device, 'turn_off')
             self.device_capabilities['power_off'] = hasattr(power_device, 'power_off')
-            
-            # Check GCODE method / Vérifier la méthode GCODE
             try:
                 gcode = self.printer.lookup_object('gcode')
-                # Check if the POWER_OFF command exists / Vérifier si la commande POWER_OFF existe
                 handler = gcode.get_command_handler().get("POWER_OFF")
                 self.device_capabilities['cmd_off'] = handler is not None
             except Exception as e:
                 self._diagnostic_log(f"Error checking GCODE capabilities: {str(e)}", level="warning")
             
-            # Log detected capabilities / Journaliser les capacités détectées
             self._diagnostic_log(f"Device capabilities: {self.device_capabilities}", level="info")
             
-            # Determine optimal power off method / Déterminer la méthode optimale d'extinction
+            # Determine optimal power off method based on available capabilities
             if self.device_capabilities['set_power']:
-                self.optimal_method = 'set_power'
+                self.optimal_method = PowerOffMethod.SET_POWER
             elif self.device_capabilities['turn_off']:
-                self.optimal_method = 'turn_off'
+                self.optimal_method = PowerOffMethod.TURN_OFF
             elif self.device_capabilities['power_off']:
-                self.optimal_method = 'power_off'
+                self.optimal_method = PowerOffMethod.POWER_OFF
             elif self.device_capabilities['cmd_off']:
-                self.optimal_method = 'cmd_off'
+                self.optimal_method = PowerOffMethod.CMD_OFF
             elif self.device_capabilities['moonraker_available']:
-                self.optimal_method = 'moonraker'
+                self.optimal_method = PowerOffMethod.MOONRAKER
             else:
-                self.optimal_method = None
-                self._diagnostic_log("No viable power off method detected!", level="error")
+                self.optimal_method = PowerOffMethod.UNKNOWN
+                self._diagnostic_log("No viable power off method detected! / Aucune méthode d'extinction viable détectée!", level="error")
             
             return True
         except Exception as e:
+            error_msg = f"Error checking device capabilities: {str(e)}"
             self.logger.error(self.get_text("error_checking_capabilities", error=str(e)))
-            self._diagnostic_log(f"Exception during capability check: {str(e)}", level="error", data=e)
-            return False
+            self._diagnostic_log(error_msg, level="error", data=e)
+            raise PowerDeviceError(error_msg) from e
 
-    def _verify_power_device(self):
+    def _verify_power_device(self) -> bool:
         """
-        Verify that the configured power device exists
-        Vérifie que le périphérique d'alimentation configuré existe
-        """
-        self.device_available = False
+        Verify that the configured power device exists and is available.
         
-        # Si l'intégration Moonraker est activée, ne pas essayer d'accéder au périphérique via Klipper
+        This method checks if the power device exists in Klipper or if 
+        Moonraker integration is enabled, and sets the device state accordingly.
+        
+        Returns:
+            bool: True if device is available, False otherwise
+            
+        Raises:
+            PowerDeviceNotFoundError: If the device is not found
+            PowerDeviceError: For other device-related errors
+        """
+        self.device_state = DeviceState.UNAVAILABLE
+        
+        # If Moonraker integration is enabled, assume device is available
         if self.moonraker_integration:
-            # On fera la vérification plus tard, lors de l'utilisation
-            self._diagnostic_log(f"Using device '{self.power_device}' via Moonraker integration", level="info")
-            self.device_available = True
+            self._diagnostic_log(f"Using device '{self.power_device}' via Moonraker integration / Utilisation du périphérique via l'intégration Moonraker", level="info")
+            self.device_state = DeviceState.AVAILABLE
             return True
         
-        # Uniquement pour les périphériques contrôlés directement par Klipper (sans Moonraker)
         try:
             device_name = f'power {self.power_device}'
             power_device = self.printer.lookup_object(device_name, None)
             
             if power_device is None:
+                error_msg = f"Power device '{self.power_device}' not found"
                 self.logger.error(self.get_text("power_device_not_found", device=self.power_device))
                 self._notify_user("power_device_not_found", device=self.power_device)
-                return False
+                raise PowerDeviceNotFoundError(error_msg)
             
-            self.device_available = True
+            self.device_state = DeviceState.AVAILABLE
             self._check_device_capabilities()
-            self._diagnostic_log(f"Power device '{self.power_device}' found", level="info")
+            self._diagnostic_log(f"Power device '{self.power_device}' found / Périphérique d'alimentation trouvé", level="info")
             return True
+        except PowerDeviceNotFoundError:
+            # Re-raise device not found error
+            raise
         except Exception as e:
+            error_msg = f"Error verifying device '{self.power_device}': {str(e)}"
             self.logger.error(self.get_text("error_verifying_device", error=str(e), device=self.power_device))
-            self._diagnostic_log(f"Exception during power device verification: {str(e)}", level="error", data=e)
-            return False
-        
-    def _power_off_dry_run(self):
+            self._diagnostic_log(error_msg, level="error", data=e)
+            raise PowerDeviceError(error_msg) from e
+
+    def _power_off_dry_run(self) -> bool:
         """
-        Simulate power off for testing purposes
-        Simule l'extinction à des fins de test
+        Simulate power off for testing purposes without actually powering off.
+        
+        This method logs the power off attempt and notifies the user,
+        but does not actually power off the device.
+        
+        Returns:
+            bool: True for successful dry run
         """
         self.logger.info(self.get_text("dry_run_power_off"))
         
-        # Log all the actions that would happen / Journaliser toutes les actions qui se produiraient
         if self.moonraker_integration and not self.force_direct:
-            self._diagnostic_log("DRY RUN: Would use Moonraker API for power off", level="info")
+            self._diagnostic_log("DRY RUN: Would use Moonraker API for power off / SIMULATION : Utiliserait l'API Moonraker pour éteindre", level="info")
         else:
-            self._diagnostic_log("DRY RUN: Would use direct Klipper method", level="info")
-            
+            self._diagnostic_log("DRY RUN: Would use direct Klipper method / SIMULATION : Utiliserait la méthode directe Klipper", level="info")
+        
         if self.optimal_method:
-            self._diagnostic_log(f"DRY RUN: Would use {self.optimal_method} method", level="info")
+            self._diagnostic_log(f"DRY RUN: Would use {self.optimal_method.name} method", level="info")
         
-        # Notify the user / Notifier l'utilisateur
         self._notify_user("dry_run_power_off")
-        
-        # Return success / Retourner succès
         return True
-    
-    def _test_network_device(self):
+
+    def _test_network_device(self) -> bool:
         """
-        Test if a network device is reachable
-        Teste si un périphérique réseau est accessible
+        Test if a network device is reachable.
+        
+        For network devices, this method attempts to connect to check
+        if the device is reachable before trying to power it off.
+        
+        Returns:
+            bool: True if device is reachable, False otherwise
+            
+        Raises:
+            NetworkDeviceUnreachableError: If the network device is unreachable
         """
         if not self.network_device or not self.device_address:
-            # Not a network device or no address provided / Pas un périphérique réseau ou pas d'adresse fournie
             return True
-        
-        import socket
-        import time
         
         self._diagnostic_log(f"Testing connectivity to network device: {self.device_address}", level="info")
         
         for attempt in range(self.network_test_attempts):
             try:
-                # Try to connect to the device / Essayer de se connecter au périphérique
-                # Use a default port, as we only need to check if the host is reachable
-                # Utiliser un port par défaut, car nous avons juste besoin de vérifier si l'hôte est accessible
-                port = 80  # A commonly open port / Un port couramment ouvert
-                
-                # Create a socket with a timeout / Créer un socket avec un timeout
+                port = 80  # Commonly open port / Port couramment ouvert
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(2.0)  # 2 seconds timeout / 2 secondes de timeout
-                
-                # Try to connect / Essayer de se connecter
+                sock.settimeout(2.0)
                 self._diagnostic_log(f"Attempt {attempt+1}/{self.network_test_attempts}: Connecting to {self.device_address}:{port}", level="debug")
                 result = sock.connect_ex((self.device_address, port))
                 sock.close()
                 
                 if result == 0:
-                    self._diagnostic_log(f"Successfully connected to {self.device_address}", level="info")
+                    self._diagnostic_log(f"Successfully connected to {self.device_address} / Connexion réussie", level="info")
                     return True
                 else:
                     self._diagnostic_log(f"Failed to connect to {self.device_address}, error code: {result}", level="warning")
-                    
+            
             except socket.error as e:
                 self._diagnostic_log(f"Socket error connecting to {self.device_address}: {str(e)}", level="warning")
             
-            # Wait before next attempt / Attendre avant la prochaine tentative
             if attempt < self.network_test_attempts - 1:
-                self._diagnostic_log(f"Waiting {self.network_test_interval}s before next attempt", level="debug")
+                self._diagnostic_log(f"Waiting {self.network_test_interval}s before next attempt / Attente de {self.network_test_interval}s avant prochaine tentative", level="debug")
                 time.sleep(self.network_test_interval)
         
-        # All attempts failed / Toutes les tentatives ont échoué
+        error_msg = f"Network device '{self.device_address}' is unreachable after {self.network_test_attempts} attempts"
         self.logger.error(self.get_text("network_device_unreachable", device=self.device_address, attempts=self.network_test_attempts))
         self._notify_user("network_device_unreachable", device=self.device_address, attempts=self.network_test_attempts)
-        return False
+        raise NetworkDeviceUnreachableError(error_msg)
 
-    def _load_translations(self):
+    def _load_translations(self) -> None:
         """
-        Load language strings from translation files
-        Charger les chaînes de langue à partir des fichiers de traduction
+        Load language strings from translation files.
+        
+        This method attempts to load translations from the language files
+        based on the configured language. If the file is not found, it falls
+        back to English.
+        
+        Returns:
+            None
+            
+        Raises:
+            TranslationError: If there's an error loading translations
         """
-        self.translations = {}
+        self.translations: Dict[str, str] = {}
         lang_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'auto_power_off_langs')
         
         try:
-            # Fallback to English if translation file doesn't exist
-            # Utiliser l'anglais par défaut si le fichier de traduction n'existe pas
             lang_file = os.path.join(lang_dir, f"{self.lang}.json")
             
             if not os.path.exists(lang_file):
-                self.logger.warning(f"Translation file {lang_file} not found, falling back to English")
-                lang_file = os.path.join(lang_dir, "en.json")
+                self.logger.warning(f"Translation file {lang_file} not found, falling back to English / Fichier de traduction introuvable, utilisation de l'anglais par défaut")
+                lang_file = os.path.join(lang_dir, f"{Language.ENGLISH.value}.json")
             
             with open(lang_file, 'r', encoding='utf-8') as f:
                 self.translations = json.load(f)
-                
-            self.logger.info(f"Loaded {len(self.translations)} translations from {lang_file}")
             
+            self.logger.info(f"Loaded {len(self.translations)} translations from {lang_file}")
+        
         except Exception as e:
-            self.logger.error(f"Error loading translations: {str(e)}. Using hardcoded English strings.")
-            # We'll fallback to the hardcoded strings in get_text()
-    
-    def get_text(self, key, **kwargs):
+            error_msg = f"Error loading translations: {str(e)}"
+            self.logger.error(f"{error_msg}. Using hardcoded English strings / Erreur lors du chargement des traductions : {str(e)}. Utilisation des chaînes anglaises codées en dur.")
+            raise TranslationError(error_msg) from e
+
+    def get_text(self, key: str, **kwargs) -> str:
         """
-        Get translated text by key, with optional formatting parameters
-        Obtenir le texte traduit par clé, avec paramètres de formatage optionnels
+        Get translated text by key, with optional formatting parameters.
+        
+        Args:
+            key: The translation key to look up
+            **kwargs: Format parameters for the translation string
+            
+        Returns:
+            str: The translated and formatted text
         """
         if key in self.translations:
             text = self.translations[key]
@@ -401,27 +501,50 @@ class AutoPowerOff:
                     return text
             return text
         
-        # Fallback to hardcoded English strings
-        # Retour aux chaînes anglaises codées en dur
         self.logger.warning(f"Missing translation key: {key}")
         
-        # Basic English fallbacks for critical messages
+        # Fallback dictionary for critical messages
         fallbacks = {
-            "module_initialized": "Auto Power Off: Module initialized",
-            "print_complete_disabled": "Print complete, but auto power off is disabled",
-            "print_complete_starting_timer": "Print complete, starting power-off timer",
-            "print_in_progress": "Print in progress or resumed, canceling shutdown",
-            "printer_not_idle": "Printer not idle, postponing shutdown",
-            "temperatures_too_high": "Temperatures too high (Hotend: {hotend_temp:.1f}, Bed: {bed_temp:.1f}), postponing shutdown",
-            "conditions_met": "Conditions met, powering off the printer",
-            "powered_off_moonraker": "Printer powered off successfully via Moonraker API",
-            "error_powering_off": "Error during power off: {error}",
-            "powered_off_set_power": "Printer powered off successfully (set_power method)",
-            "auto_power_off_enabled": "Auto power off globally enabled",
-            "auto_power_off_disabled": "Auto power off globally disabled",
-            "diagnostic_mode_enabled": "Diagnostic mode enabled. Detailed logging activated.",
-            "diagnostic_mode_disabled": "Diagnostic mode disabled.",
-            "power_off_direct_attempt": "Attempting direct power off method"
+            "module_initialized": "Auto Power Off: Module initialized / Extinction auto : Module initialisé",
+            "print_complete_disabled": "Print complete, but auto power off is disabled / Impression terminée, extinction auto désactivée",
+            "print_complete_starting_timer": "Print complete, starting power-off timer / Impression terminée, démarrage du minuteur d'extinction",
+            "print_in_progress": "Print in progress or resumed, canceling shutdown / Impression en cours ou reprise, annulation de l'extinction",
+            "printer_not_idle": "Printer not idle, postponing shutdown / Imprimante non inoccupée, extinction reportée",
+            "temperatures_too_high": "Temperatures too high (Hotend: {hotend_temp:.1f}, Bed: {bed_temp:.1f}), postponing shutdown / Températures trop élevées (Buse: {hotend_temp:.1f}, Lit: {bed_temp:.1f}), extinction reportée",
+            "temperatures_too_high_custom": "Temperatures too high ({temp_msg}), maximum is {max_temp:.1f}°C / Températures trop élevées ({temp_msg}), maximum autorisé {max_temp:.1f}°C",
+            "conditions_met": "Conditions met, powering off the printer / Conditions remplies, extinction de l'imprimante",
+            "powered_off_moonraker": "Printer powered off successfully via Moonraker API / Imprimante éteinte avec succès via l'API Moonraker",
+            "error_powering_off": "Error during power off: {error} / Erreur lors de l'extinction : {error}",
+            "powered_off_set_power": "Printer powered off successfully (set_power method) / Imprimante éteinte avec succès (méthode set_power)",
+            "powered_off_turn_off": "Printer powered off successfully (turn_off method) / Imprimante éteinte avec succès (méthode turn_off)",
+            "powered_off_power_off": "Printer powered off successfully (power_off method) / Imprimante éteinte avec succès (méthode power_off)",
+            "powered_off_gcode": "Printer powered off successfully via GCODE / Imprimante éteinte avec succès via GCODE",
+            "power_device_not_found": "Power device '{device}' not found / Périphérique d'alimentation '{device}' introuvable",
+            "error_checking_capabilities": "Error checking device capabilities: {error} / Erreur lors de la vérification des capacités : {error}",
+            "error_verifying_device": "Error verifying device '{device}': {error} / Erreur lors de la vérification du périphérique '{device}' : {error}",
+            "dry_run_power_off": "Dry run: Power off simulated / Simulation : Extinction simulée",
+            "network_device_unreachable": "Network device '{device}' unreachable after {attempts} attempts / Périphérique réseau '{device}' injoignable après {attempts} tentatives",
+            "power_device_not_available_for_poweroff": "Power device '{device}' not available for power off / Périphérique '{device}' non disponible pour l'extinction",
+            "error_moonraker_all_retries_failed": "All Moonraker retries failed (retries: {retries}, error: {error}) / Toutes les tentatives via Moonraker ont échoué (tentatives : {retries}, erreur : {error})",
+            "falling_back_to_direct": "Falling back to direct power off method / Repli sur la méthode directe d'extinction",
+            "power_off_success": "Power off command issued successfully / Commande d'extinction émise avec succès",
+            "no_power_off_method": "No power off method available / Aucune méthode d'extinction disponible",
+            "shutdown_in_progress": "Shutdown already in progress / Extinction déjà en cours",
+            "printer_already_shutdown": "Printer already shutdown / Imprimante déjà éteinte",
+            "error_disabling_heaters": "Error disabling heaters: {error} / Erreur lors de la désactivation des chauffages : {error}",
+            "error_preparing_shutdown": "Error preparing for shutdown: {error} / Erreur lors de la préparation à l'extinction : {error}",
+            "auto_power_off_enabled": "Auto power off globally enabled / Extinction automatique activée globalement",
+            "auto_power_off_disabled": "Auto power off globally disabled / Extinction automatique désactivée globalement",
+            "timer_started": "Idle timer started / Minuteur d'inactivité démarré",
+            "timer_already_active": "Idle timer already active / Minuteur d'inactivité déjà actif",
+            "timer_canceled": "Idle timer canceled / Minuteur d'inactivité annulé",
+            "no_active_timer": "No active timer to cancel / Aucun minuteur actif à annuler",
+            "status_template": "Status: {enabled_status}, Timer: {timer_status}, Countdown: {countdown}, Temps: {temps}, Temp Threshold: {temp_threshold}°C, Idle Timeout: {idle_timeout} minutes / Statut : {enabled_status}, Minuteur : {timer_status}, Compte à rebours : {countdown}, Températures : {temps}, Seuil de Temp : {temp_threshold}°C, Temps inactivité : {idle_timeout} minutes",
+            "powering_off": "Powering off the printer / Extinction de l'imprimante en cours",
+            "option_not_recognized": "Option not recognized / Option non reconnue",
+            "print_in_progress_moonraker": "Print in progress via Moonraker (state: {state}) / Impression en cours via Moonraker (état : {state})",
+            "enabled_status": "Enabled / Activé",
+            "disabled_status": "Disabled / Désactivé"
         }
         
         if key in fallbacks:
@@ -429,75 +552,93 @@ class AutoPowerOff:
             if kwargs:
                 try:
                     return text.format(**kwargs)
-                except:
+                except Exception:
                     return text
             return text
         
-        return f"[{key}]"  # Return the key itself as last resort
-    
-    def _handle_connect(self):
-        """Called on initial connection / Appelé lors de la connexion initiale"""
-        # Vérifier si l'objet existe déjà avant de l'ajouter
+        return f"[{key}]"
+
+    def _handle_connect(self) -> None:
+        """
+        Called on initial connection to register the object.
+        
+        This method registers the auto_power_off object with the printer
+        if it doesn't already exist.
+        
+        Returns:
+            None
+        """
         try:
             self.printer.lookup_object("auto_power_off")
-            # L'objet existe déjà, ne rien faire
         except self.printer.config_error:
-            # L'objet n'existe pas encore, l'ajouter
             self.printer.add_object("auto_power_off", self)
-    
-    def _handle_ready(self):
-        """Called when Klipper is ready / Appelé quand Klipper est prêt"""
+
+    def _handle_ready(self) -> None:
+        """
+        Called when Klipper is ready to set up the module.
+        
+        This method logs the initialization, verifies the power device,
+        and sets up periodic temperature checking.
+        
+        Returns:
+            None
+        """
         self.logger.info(self.get_text("module_initialized"))
         
-        # Verify that the power device exists / Vérifier que le périphérique d'alimentation existe
-        if self._verify_power_device():
-            self.logger.info(self.get_text("power_device_ready", device=self.power_device))
-        else:
-            self.logger.warning(self.get_text("power_device_not_available", device=self.power_device))
+        try:
+            if self._verify_power_device():
+                self.logger.info(self.get_text("power_device_ready", device=self.power_device))
+            else:
+                self.logger.warning(self.get_text("power_device_not_available", device=self.power_device))
+        except (PowerDeviceNotFoundError, PowerDeviceError) as e:
+            self.logger.error(str(e))
         
-        # Set up periodic temperature checker / Mise en place du vérificateur de température périodique
+        # Set up periodic temperature checker
         self.reactor.register_timer(self._update_temps, self.reactor.monotonic() + 1)
-    
-    def _handle_print_complete(self):
+
+    def _handle_print_complete(self) -> None:
         """
-        Called when print is complete / Appelé quand l'impression est terminée
+        Called when print is complete to start shutdown timer.
         
-        Note: This replaces the now deprecated Moonraker 'off_when_job_complete' functionality
-        with a more intelligent approach that checks temperatures and allows cooling before shutdown.
+        This method starts the shutdown timer if auto power off is enabled.
         
-        Note (FR): Ceci remplace la fonctionnalité 'off_when_job_complete' de Moonraker (maintenant obsolète)
-        avec une approche plus intelligente qui vérifie les températures et permet le refroidissement avant l'extinction.
+        Returns:
+            None
         """
         if not self.enabled:
             self.logger.info(self.get_text("print_complete_disabled"))
             return
-                
+        
         self.logger.info(self.get_text("print_complete_starting_timer"))
         
-        # Cancel any existing timer / Annuler tout minuteur existant
+        # Cancel any existing timer
         if self.shutdown_timer is not None:
             self.reactor.unregister_timer(self.shutdown_timer)
         
-        # Start the idle timer / Démarrer le minuteur d'inactivité
+        # Start the idle timer
         waketime = self.reactor.monotonic() + self.idle_timeout
         self.countdown_end = self.reactor.monotonic() + self.idle_timeout
         self.shutdown_timer = self.reactor.register_timer(self._check_conditions, waketime)
-   
 
-    def _check_print_status_via_moonraker(self):
-        """Vérifier l'état d'impression via l'API Moonraker"""
+    def _check_print_status_via_moonraker(self) -> Optional[str]:
+        """
+        Check print status via Moonraker API.
+        
+        This method uses the Moonraker API to check if a print
+        is in progress, which is useful as a fallback check.
+        
+        Returns:
+            str or None: The print state if available, None otherwise
+            
+        Raises:
+            MoonrakerApiError: If there's an error accessing the Moonraker API
+        """
         if not self.moonraker_integration:
             return None
-            
-        import subprocess
-        import json
         
         try:
-            # Vérifier l'état d'impression via l'API Moonraker avec curl
             base_url = self.moonraker_url.rstrip('/')
             curl_command = f'curl -s "{base_url}/printer/objects/query?print_stats=state"'
-            
-            # Exécuter la commande curl
             result = subprocess.run(curl_command, shell=True, capture_output=True, text=True, timeout=5)
             
             if result.returncode == 0:
@@ -506,106 +647,168 @@ class AutoPowerOff:
                     state = data['result']['status'].get('print_stats', {}).get('state')
                     self._diagnostic_log(f"Moonraker print state: {state}", level="info")
                     return state
+            
+            return None
         except Exception as e:
-            self._diagnostic_log(f"Error checking print status via Moonraker: {str(e)}", level="warning")
-        
-        return None
+            error_msg = f"Error checking print status via Moonraker: {str(e)}"
+            self._diagnostic_log(error_msg, level="warning")
+            raise MoonrakerApiError(error_msg) from e
 
-    def _check_conditions(self, eventtime):
-        """Check if conditions for power off are met / Vérifie si les conditions pour éteindre sont remplies"""
-        # Vérifier si le MCU est connecté / Check if MCU is connected
+    def _get_printer_state(self, eventtime: float) -> PrinterState:
+        """
+        Get the current state of the printer.
+        
+        This method checks different sources to determine if the printer
+        is printing, idle, etc.
+        
+        Args:
+            eventtime: Current event time from Klipper
+            
+        Returns:
+            PrinterState: The current state of the printer
+        """
+        # Check if MCU is connected
         if not self._is_mcu_connected():
-            # Ne pas journaliser d'avertissement ici car cette fonction est appelée fréquemment
-            # Don't log warning here as this function is called frequently
-            return eventtime + 1.0
-
-        # Check current print state / Vérifier l'état d'impression actuel
-        print_stats = self.printer.lookup_object('print_stats', None)
+            return PrinterState.UNKNOWN
         
-        if print_stats:
-            state = print_stats.get_status(eventtime)['state']
-            if state in ['printing', 'paused']:
-                self.logger.info(self.get_text("print_in_progress"))
-                return self.reactor.NEVER
+        # Check print_stats
+        try:
+            print_stats = self.printer.lookup_object('print_stats', None)
+            if print_stats:
+                state = print_stats.get_status(eventtime)['state']
+                if state in ['printing', 'paused']:
+                    return PrinterState.PRINTING if state == 'printing' else PrinterState.PAUSED
+        except Exception as e:
+            self._diagnostic_log(f"Error checking print_stats: {str(e)}", level="warning")
+        
+        # Check gcode_move
         try:
             gcode_move = self.printer.lookup_object('gcode_move')
             if gcode_move and gcode_move.get_status(eventtime).get('is_printing', False):
-                self.logger.info(self.get_text("print_in_progress"))
-                return self.reactor.NEVER
+                return PrinterState.PRINTING
         except Exception as e:
-            self._diagnostic_log(f"Error checking gcode_move: {str(e)}", level="warning") 
-
-        # Vérification supplémentaire via Moonraker si disponible
+            self._diagnostic_log(f"Error checking gcode_move: {str(e)}", level="warning")
+        
+        # Check via Moonraker
         if self.moonraker_integration:
-            moonraker_state = self._check_print_status_via_moonraker()
-            if moonraker_state in ['printing', 'paused']:
-                self.logger.info(self.get_text("print_in_progress_moonraker", state=moonraker_state))
-                return self.reactor.NEVER
+            try:
+                moonraker_state = self._check_print_status_via_moonraker()
+                if moonraker_state in ['printing', 'paused']:
+                    return PrinterState.PRINTING if moonraker_state == 'printing' else PrinterState.PAUSED
+            except MoonrakerApiError as e:
+                self._diagnostic_log(f"Error checking Moonraker: {str(e)}", level="warning")
+        
+        # Check if printer is idle
+        try:
+            idle_timeout_obj = self.printer.lookup_object('idle_timeout')
+            idle_state = idle_timeout_obj.get_status(eventtime)['state']
+            if idle_state == 'Idle':
+                return PrinterState.IDLE
+            else:
+                return PrinterState.BUSY
+        except Exception as e:
+            self._diagnostic_log(f"Error checking idle_timeout: {str(e)}", level="warning")
+        
+        return PrinterState.UNKNOWN
 
-        # Check if printer is truly idle / Vérifier si l'imprimante est vraiment inactive
-        idle_timeout = self.printer.lookup_object('idle_timeout')
-        if idle_timeout.get_status(eventtime)['state'] != 'Idle':
-            self.logger.info(self.get_text("printer_not_idle"))
-            return eventtime + 60.0  # Check again in 60 seconds / Vérifier à nouveau dans 60 secondes
-        
-        # Check temperatures / Vérifier les températures
-        heaters = self.printer.lookup_object('heaters')
-        max_temp = 0.0
-        temps = {}
-        
-        # Check hotend if enabled / Vérifier l'extrudeur si activé
-        if self.monitor_hotend:
-            try:
-                hotend = self.printer.lookup_object('extruder').get_heater()
-                hotend_temp = heaters.get_status(eventtime)[hotend.get_name()]['temperature']
-                temps['hotend'] = hotend_temp
-                max_temp = max(max_temp, hotend_temp)
-            except Exception as e:
-                self.logger.warning(f"Unable to get hotend temperature: {str(e)}")
-        
-        # Check bed if enabled / Vérifier le lit si activé
-        if self.monitor_bed:
-            try:
-                bed = self.printer.lookup_object('heater_bed', None)
-                if bed is not None:
-                    bed_temp = heaters.get_status(eventtime)[bed.get_heater().get_name()]['temperature']
-                    temps['bed'] = bed_temp
-                    max_temp = max(max_temp, bed_temp)
-            except Exception as e:
-                self.logger.warning(f"Unable to get bed temperature: {str(e)}")
-        
-        # Check chamber if enabled / Vérifier la chambre si activée
-        if self.monitor_chamber:
-            try:
-                chamber = self.printer.lookup_object('temperature_sensor chamber', None)
-                if chamber is not None:
-                    chamber_temp = chamber.get_status(eventtime)['temperature']
-                    temps['chamber'] = chamber_temp
-                    max_temp = max(max_temp, chamber_temp)
-            except Exception as e:
-                self.logger.warning(f"Unable to get chamber temperature: {str(e)}")
-        
-        # Update last temperatures for status / Mettre à jour les dernières températures pour le statut
-        self.last_temps = temps
-        
-        # Check if max temperature is below threshold / Vérifier si la température maximale est inférieure au seuil
-        if max_temp > self.temp_threshold:
-            # Format temperature message / Formater le message de température
-            temp_msg = ", ".join(f"{key}: {value:.1f}°C" for key, value in temps.items())
-            self.logger.info(self.get_text("temperatures_too_high_custom", temp_msg=temp_msg, max_temp=max_temp))
-            return eventtime + 60.0  # Check again in 60 seconds / Vérifier à nouveau dans 60 secondes
-        
-        # All conditions met, power off the printer / Toutes les conditions sont remplies, éteindre l'imprimante
-        self._power_off()
-        return self.reactor.NEVER
-    
-    def _is_mcu_connected(self):
+    def _check_conditions(self, eventtime: float) -> float:
         """
-        Vérifie si le MCU est connecté et répond aux commandes
-        Checks if the MCU is connected and responding to commands
+        Check if conditions for power off are met.
+        
+        This method checks if the printer is idle and if temperatures
+        are below the threshold. If all conditions are met, it powers off the printer.
+        
+        Args:
+            eventtime: Current event time from Klipper
+            
+        Returns:
+            float: Time for next check or NEVER if conditions are met
+        """
+        # Get printer state
+        printer_state = self._get_printer_state(eventtime)
+        
+        # If printer is printing or paused, cancel shutdown
+        if printer_state in [PrinterState.PRINTING, PrinterState.PAUSED]:
+            self.logger.info(self.get_text("print_in_progress"))
+            return self.reactor.NEVER
+        
+        # If printer is not idle, postpone shutdown
+        if printer_state != PrinterState.IDLE:
+            self.logger.info(self.get_text("printer_not_idle"))
+            return eventtime + 60.0  # Recheck in 60 seconds
+        
+        # Check temperatures
+        temps: Dict[str, float] = {}
+        max_temp: float = 0.0
+        
+        try:
+            heaters = self.printer.lookup_object('heaters')
+            
+            # Check hotend if enabled
+            if self.monitor_hotend:
+                try:
+                    hotend = self.printer.lookup_object('extruder').get_heater()
+                    hotend_temp = heaters.get_status(eventtime)[hotend.get_name()]['temperature']
+                    temps['hotend'] = hotend_temp
+                    max_temp = max(max_temp, hotend_temp)
+                except Exception as e:
+                    self.logger.warning(f"Unable to get hotend temperature: {str(e)}")
+            
+            # Check bed if enabled
+            if self.monitor_bed:
+                try:
+                    bed = self.printer.lookup_object('heater_bed', None)
+                    if bed is not None:
+                        bed_temp = heaters.get_status(eventtime)[bed.get_heater().get_name()]['temperature']
+                        temps['bed'] = bed_temp
+                        max_temp = max(max_temp, bed_temp)
+                except Exception as e:
+                    self.logger.warning(f"Unable to get bed temperature: {str(e)}")
+            
+            # Check chamber if enabled
+            if self.monitor_chamber:
+                try:
+                    chamber = self.printer.lookup_object('temperature_sensor chamber', None)
+                    if chamber is not None:
+                        chamber_temp = chamber.get_status(eventtime)['temperature']
+                        temps['chamber'] = chamber_temp
+                        max_temp = max(max_temp, chamber_temp)
+                except Exception as e:
+                    self.logger.warning(f"Unable to get chamber temperature: {str(e)}")
+            
+            # Update last temperatures for status
+            self.last_temps = temps
+            
+            # Check if max temperature is below threshold
+            if max_temp > self.temp_threshold:
+                temp_msg = ", ".join(f"{key}: {value:.1f}°C" for key, value in temps.items())
+                self.logger.info(self.get_text("temperatures_too_high_custom", temp_msg=temp_msg, max_temp=max_temp))
+                return eventtime + 60.0  # Recheck in 60 seconds
+            
+            # All conditions met, power off the printer
+            try:
+                self._power_off()
+            except (PowerOffError, NetworkDeviceError, MoonrakerApiError) as e:
+                self.logger.error(f"Error during power off: {str(e)}")
+                return eventtime + 60.0  # Retry in 60 seconds
+            
+            return self.reactor.NEVER
+        
+        except Exception as e:
+            self.logger.error(f"Error checking conditions: {str(e)}")
+            return eventtime + 60.0  # Retry in 60 seconds
+
+    def _is_mcu_connected(self) -> bool:
+        """
+        Check if the MCU is connected and responding.
+        
+        Returns:
+            bool: True if MCU is connected, False otherwise
+            
+        Raises:
+            MCUError: If there's an error checking MCU status
         """
         try:
-            # Tentative de vérification de l'état du MCU / Attempt to check MCU status
             mcu = self.printer.lookup_object('mcu', None)
             if mcu is None:
                 self._diagnostic_log(self.get_text("mcu_object_not_found"), level="warning")
@@ -615,400 +818,426 @@ class AutoPowerOff:
                 return False
             return True
         except Exception as e:
+            error_msg = f"Error checking MCU status: {str(e)}"
             self._diagnostic_log(self.get_text("error_checking_mcu_status", error=str(e)), level="warning")
-            return False
+            raise MCUError(error_msg) from e
 
-    def _prepare_mcu_for_shutdown(self):
+    def _prepare_mcu_for_shutdown(self) -> None:
         """
-        Prépare le MCU pour une extinction propre
-        Prepares the MCU for a clean shutdown
+        Prepare the MCU for a clean shutdown.
+        
+        This method turns off heaters and performs other cleanup
+        before powering off the printer.
+        
+        Returns:
+            None
+            
+        Raises:
+            PowerOffError: If there's an error preparing for shutdown
         """
         try:
-            # Éviter les actions redondantes / Avoid redundant actions
-            if hasattr(self, '_shutdown_in_progress') and self._shutdown_in_progress:
+            if self._shutdown_in_progress:
                 self.logger.info(self.get_text("shutdown_in_progress"))
                 return
-                
-            # Vérifier si l'imprimante est déjà arrêtée
-            # Check if printer is already shutdown
+            
             if self.printer.is_shutdown():
                 self.logger.warning(self.get_text("printer_already_shutdown"))
                 return
-                    
-            self._shutdown_in_progress = True
-            self._diagnostic_log("Préparation du MCU pour l'extinction", level="info")
             
-            # Essayer d'éteindre tous les chauffages / Try to turn off all heaters
+            self._shutdown_in_progress = True
+            self._diagnostic_log("Preparing MCU for shutdown / Préparation du MCU pour l'extinction", level="info")
+            
             try:
                 gcode = self.printer.lookup_object('gcode')
                 gcode.run_script_from_command("TURN_OFF_HEATERS")
-                
-                # Petit délai pour permettre au traitement / Small delay to allow processing
-                import time
                 time.sleep(0.5)
             except Exception as e:
-                self._diagnostic_log(self.get_text("error_disabling_heaters", error=str(e)), 
-                                    level="warning")
-        except Exception as e:
-            self._diagnostic_log(self.get_text("error_preparing_shutdown", error=str(e)), 
-                                level="warning")
-    
-    def _power_off(self, force_direct=False, diagnostic_mode=None):
-        """
-        Power off the printer with enhanced error handling and retry mechanism
-        Éteint l'imprimante avec une gestion d'erreur améliorée et un mécanisme de nouvelle tentative
+                error_msg = f"Error disabling heaters: {str(e)}"
+                self._diagnostic_log(self.get_text("error_disabling_heaters", error=str(e)), level="warning")
+                raise PowerOffError(error_msg) from e
         
-        Parameters:
-        - force_direct: Force direct Klipper method instead of Moonraker API (bypass API)
-                        Forcer la méthode directe Klipper au lieu de l'API Moonraker (contourne l'API)
-        - diagnostic_mode: Override global diagnostic mode setting if not None
-                        Remplacer le paramètre global du mode diagnostic si non None
+        except Exception as e:
+            error_msg = f"Error preparing for shutdown: {str(e)}"
+            self._diagnostic_log(self.get_text("error_preparing_shutdown", error=str(e)), level="warning")
+            raise PowerOffError(error_msg) from e
+
+    def _execute_curl_with_retry(self, command: str, max_retries: int, retry_delay: int, timeout: int = 10) -> subprocess.CompletedProcess:
+        """
+        Execute a curl command with retry logic.
+        
+        Args:
+            command: The curl command to execute
+            max_retries: Maximum number of retry attempts
+            retry_delay: Delay between retries in seconds
+            timeout: Timeout for the curl command in seconds
+            
+        Returns:
+            subprocess.CompletedProcess: The completed process if successful
+            
+        Raises:
+            MoonrakerApiError: If all retries fail
+        """
+        retry_count = 0
+        last_error: Optional[Exception] = None
+        
+        while retry_count < max_retries:
+            self._diagnostic_log(f"Power off attempt {retry_count + 1}/{max_retries} / Tentative d'extinction {retry_count + 1}/{max_retries}", level="info")
+            
+            try:
+                result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout)
+                
+                if result.returncode == 0:
+                    try:
+                        response_data = json.loads(result.stdout)
+                        self._diagnostic_log(f"Curl command response: {response_data}", level="info")
+                        
+                        if 'error' in response_data:
+                            error_msg = f"Moonraker API error: {response_data['error']}"
+                            self._diagnostic_log(error_msg, level="error")
+                            last_error = MoonrakerApiError(error_msg)
+                        else:
+                            return result
+                    
+                    except json.JSONDecodeError:
+                        self._diagnostic_log("Non-JSON response but curl successful: " + result.stdout[:200], level="info")
+                        return result
+                
+                else:
+                    error_msg = f"Curl command failed (code {result.returncode}): {result.stderr}"
+                    self._diagnostic_log(error_msg, level="error")
+                    last_error = MoonrakerApiError(error_msg)
+            
+            except subprocess.TimeoutExpired:
+                error_msg = "Curl command timed out / Délai d'attente expiré pour curl"
+                self._diagnostic_log(error_msg, level="error")
+                last_error = MoonrakerApiError(error_msg)
+            
+            except Exception as e:
+                error_msg = f"Error executing curl command: {str(e)}"
+                self._diagnostic_log(error_msg, level="error")
+                last_error = e
+            
+            retry_count += 1
+            
+            if retry_count < max_retries:
+                self._diagnostic_log(f"Retrying in {retry_delay} seconds... / Nouvelle tentative dans {retry_delay} secondes...", level="info")
+                time.sleep(retry_delay)
+        
+        # If we get here, all retries failed
+        error_msg = f"All {max_retries} retry attempts failed"
+        if last_error:
+            error_msg = f"{error_msg}: {str(last_error)}"
+        
+        raise MoonrakerApiError(error_msg)
+
+    def _power_off(self, force_direct: bool = False, diagnostic_mode: Optional[bool] = None) -> None:
+        """
+        Power off the printer with error handling and retry mechanism.
+        
+        Args:
+            force_direct: Force direct Klipper method instead of Moonraker API
+            diagnostic_mode: Override global diagnostic mode setting
+            
+        Returns:
+            None
+            
+        Raises:
+            PowerOffError: If there's an error during power off
+            PowerDeviceNotAvailableError: If the power device is not available
+            NetworkDeviceUnreachableError: If the network device is unreachable
+            MoonrakerApiError: If there's an error with the Moonraker API
         """
         try:
-            # Vérifier si l'extinction est déjà en cours
-            # Check if shutdown is already in progress
-            if hasattr(self, '_shutdown_in_progress') and self._shutdown_in_progress:
-                self.logger.info("Une extinction est déjà en cours, commande ignorée")
+            if self._shutdown_in_progress:
+                self.logger.info("Shutdown already in progress / Extinction déjà en cours, commande ignorée")
                 return
-                
-            # Vérifier si l'imprimante est déjà arrêtée
-            # Check if printer is already shutdown
+            
             if self.printer.is_shutdown():
-                self.logger.warning("L'imprimante est déjà arrêtée, abandon de la procédure d'extinction")
+                self.logger.warning("Printer already shutdown / Imprimante déjà éteinte, abandon de la procédure")
                 return
-                
+            
             self.logger.info(self.get_text("conditions_met"))
             self.force_direct = force_direct
             
-            # Ajout de logs pour diagnostiquer les problèmes d'URL et de configuration
-            self._diagnostic_log(f"Starting power off process: moonraker_integration={self.moonraker_integration}, " 
-                                f"force_direct={force_direct}, device={self.power_device}", level="info")
+            self._diagnostic_log(f"Starting power off process: moonraker_integration={self.moonraker_integration}, force_direct={force_direct}, device={self.power_device}", level="info")
             
-            # Vérifier les URLs Moonraker
             if self.moonraker_integration:
                 base_url = self.moonraker_url.rstrip('/')
                 power_status_url = f"{base_url}/printer/objects/query?objects=power_devices"
                 power_off_url = f"{base_url}/machine/device_power/device?device={self.power_device}&action=off"
                 self._diagnostic_log(f"Moonraker URLs: status={power_status_url}, power_off={power_off_url}", level="info")
             
-            # Initialiser un flag pour le suivi de l'extinction
-            # Initialize a flag for shutdown tracking
             self._shutdown_in_progress = False
             
-            # Check if power device is available / Vérifier si le périphérique d'alimentation est disponible
-            if not self.device_available:
+            if self.device_state != DeviceState.AVAILABLE:
+                error_msg = f"Power device '{self.power_device}' not available for power off"
                 self.logger.error(self.get_text("power_device_not_available_for_poweroff", device=self.power_device))
                 self._notify_user("power_device_not_available_for_poweroff", device=self.power_device)
-                return
+                raise PowerDeviceNotAvailableError(error_msg)
             
-            # If diagnostic parameter is passed, use it temporarily, otherwise use the global setting
-            # Si le paramètre de diagnostic est passé, l'utiliser temporairement, sinon utiliser le paramètre global
+            # Override diagnostic mode if specified
             self._diagnostic_mode = diagnostic_mode if diagnostic_mode is not None else self.diagnostic_mode
-
-            # For network devices, test connectivity first / Pour les périphériques réseau, tester d'abord la connectivité
-            if self.network_device and not self._test_network_device():
-                self.logger.error(self.get_text("network_device_unreachable_poweroff", device=self.device_address))
-                self._notify_user("network_device_unreachable_poweroff", device=self.device_address)
-                return
             
-            # If dry run mode is enabled, simulate power off / Si le mode simulation est activé, simuler l'extinction
+            # For network devices, test connectivity first
+            if self.network_device:
+                try:
+                    self._test_network_device()
+                except NetworkDeviceUnreachableError as e:
+                    self.logger.error(self.get_text("network_device_unreachable", device=self.device_address, attempts=self.network_test_attempts))
+                    self._notify_user("network_device_unreachable_poweroff", device=self.device_address)
+                    raise
+            
+            # If dry run mode is enabled, simulate power off
             if self.dry_run_mode:
                 return self._power_off_dry_run()
             
-            # IMPORTANT: Préparer le système pour l'extinction
-            # IMPORTANT: Prepare the system for shutdown
+            # Prepare the MCU for shutdown
             self._prepare_mcu_for_shutdown()
-            
-            # Ajouter un délai de sécurité pour permettre aux logs d'être écrits
-            # Add a safety delay to allow logs to be written
-            import time
             time.sleep(1)
             
-            # Check if we should use Moonraker's API and not forced to use direct method
-            # Vérifier si nous devons utiliser l'API Moonraker et pas forcé d'utiliser la méthode directe
+            # Use Moonraker API if enabled and not forced to use direct method
             if self.moonraker_integration and not force_direct:
-                self._diagnostic_log("Using Moonraker API for power off", level="info")
-                self._power_off_via_moonraker(max_retries=self.power_off_retries, retry_delay=self.power_off_retry_delay)
+                self._diagnostic_log("Using Moonraker API for power off / Utilisation de l'API Moonraker pour extinction", level="info")
+                
+                try:
+                    curl_cmd = f'curl -s -X POST "{self.moonraker_url.rstrip("/")}/machine/device_power/device?device={self.power_device}&action=off"'
+                    result = self._execute_curl_with_retry(curl_cmd, self.power_off_retries, self.power_off_retry_delay, timeout=10)
+                    
+                    try:
+                        json.loads(result.stdout)
+                    except json.JSONDecodeError:
+                        pass
+                    
+                    self.logger.info(self.get_text("powered_off_moonraker"))
+                    self._notify_user("power_off_success")
+                    self.state = "off"
+                    return
+                
+                except MoonrakerApiError as e:
+                    self.logger.error(self.get_text("error_moonraker_all_retries_failed", retries=self.power_off_retries, error=str(e)))
+                    self._notify_user("moonraker_retries_failed")
+                    self.logger.info(self.get_text("falling_back_to_direct"))
+                    
+                    try:
+                        self._prepare_mcu_for_shutdown()
+                        time.sleep(1)
+                        self._power_off_direct()
+                    except PowerOffError as direct_error:
+                        self.logger.error(f"Direct method also failed: {str(direct_error)}")
+                        self.state = "error"
+                        raise
+            
             else:
                 method = "direct (forced)" if force_direct else "direct"
-                self._diagnostic_log(f"Using {method} Klipper method for power off", level="info")
+                self._diagnostic_log(f"Using {method} Klipper method for power off / Utilisation de la méthode {method} pour extinction", level="info")
                 self._power_off_direct()
-        except Exception as e:
-            self.logger.error(f"Unhandled exception during power off: {str(e)}")
-            self._diagnostic_log(f"Power off exception details: {str(e)}", level="error", data=e)
-            self._shutdown_in_progress = False
-            # Ne pas propager l'exception plus loin / Don't propagate exception further
-            return
-
-    def _diagnostic_log(self, message, level="debug", data=None):
-        """
-        Log diagnostic information if diagnostic mode is enabled
-        Journalise les informations de diagnostic si le mode diagnostic est activé
         
-        Parameters:
-        - message: Message to log / Message à journaliser
-        - level: Log level (debug, info, warning, error) / Niveau de journal
-        - data: Additional data to log / Données supplémentaires à journaliser
+        except (PowerOffError, NetworkDeviceError, MoonrakerApiError) as e:
+            raise
+        
+        except Exception as e:
+            error_msg = f"Unhandled exception during power off: {str(e)}"
+            self.logger.error(error_msg)
+            self._diagnostic_log(error_msg, level="error", data=e)
+            self._shutdown_in_progress = False
+            raise PowerOffError(error_msg) from e
+
+    def _diagnostic_log(self, message: str, level: str = "debug", data: Any = None) -> None:
         """
-        # Always log errors regardless of diagnostic mode
-        # Toujours journaliser les erreurs quel que soit le mode diagnostic
+        Log diagnostic information if diagnostic mode is enabled.
+        
+        Args:
+            message: The message to log
+            level: The log level (debug, info, warning, error)
+            data: Additional data to log
+            
+        Returns:
+            None
+        """
         if level == "error":
             self.logger.error(message)
             if data:
                 self.logger.error(f"Error details: {data}")
             return
-                
-        # For other levels, only log if in diagnostic mode
-        # Pour les autres niveaux, journaliser uniquement en mode diagnostic
+        
         if hasattr(self, '_diagnostic_mode') and self._diagnostic_mode:
             log_method = getattr(self.logger, level, self.logger.info)
             log_method(f"DIAGNOSTIC: {message}")
             if data:
                 log_method(f"DIAGNOSTIC DATA: {data}")
-    
-    def _power_off_via_moonraker(self, max_retries=3, retry_delay=2):
-        """Power off the printer using Moonraker API via curl command"""
-        import subprocess
-        import time
-        import json
 
-        base_url = self.moonraker_url.rstrip('/')
-        power_off_command = f'curl -s -X POST "{base_url}/machine/device_power/device?device={self.power_device}&action=off"'
+    def _power_off_direct(self) -> None:
+        """
+        Power off the printer using direct Klipper control methods.
         
-        self._diagnostic_log(f"Using curl command: {power_off_command}", level="info")
+        This method uses the optimal method determined during device
+        capability check to power off the printer.
         
-        retry_count = 0
-        last_error = None
-        
-        while retry_count < max_retries:
-            self._diagnostic_log(f"Power off attempt {retry_count + 1}/{max_retries}", level="info")
+        Returns:
+            None
             
-            try:
-                # Exécuter la commande curl
-                result = subprocess.run(power_off_command, shell=True, capture_output=True, text=True, timeout=10)
-                
-                # Vérifier le résultat
-                if result.returncode == 0:
-                    try:
-                        # Essayer de parser la réponse JSON pour un meilleur diagnostic
-                        response_data = json.loads(result.stdout)
-                        self._diagnostic_log(f"Curl command response: {response_data}", level="info")
-                        
-                        # Vérifier si la réponse indique une erreur
-                        if 'error' in response_data:
-                            error_msg = f"Moonraker API error: {response_data['error']}"
-                            self._diagnostic_log(error_msg, level="error")
-                            last_error = Exception(error_msg)
-                        else:
-                            self.logger.info(self.get_text("powered_off_moonraker"))
-                            self._notify_user("power_off_success")
-                            self.state = "off"
-                            return
-                    except json.JSONDecodeError:
-                        # Si la réponse n'est pas du JSON valide mais que curl a réussi, considérer comme un succès
-                        self._diagnostic_log(f"Non-JSON response but curl successful: {result.stdout[:200]}", level="info")
-                        self.logger.info(self.get_text("powered_off_moonraker"))
-                        self._notify_user("power_off_success")
-                        self.state = "off"
-                        return
-                else:
-                    error_msg = f"Curl command failed (code {result.returncode}): {result.stderr}"
-                    self._diagnostic_log(error_msg, level="error")
-                    last_error = Exception(error_msg)
-            except subprocess.TimeoutExpired:
-                error_msg = "Curl command timed out"
-                self._diagnostic_log(error_msg, level="error")
-                last_error = Exception(error_msg)
-            except Exception as e:
-                error_msg = f"Error executing curl command: {str(e)}"
-                self._diagnostic_log(error_msg, level="error")
-                last_error = e
-                
-            retry_count += 1
-            if retry_count < max_retries:
-                self._diagnostic_log(f"Retrying in {retry_delay} seconds...", level="info")
-                time.sleep(retry_delay)
-        
-        # Si on arrive ici, toutes les tentatives ont échoué
-        error_message = str(last_error) if last_error else "Unknown error"
-        self.logger.error(self.get_text("error_moonraker_all_retries_failed", 
-                                    retries=max_retries, 
-                                    error=error_message))
-        
-        # Notify user about failure and fallback
-        self._notify_user("moonraker_retries_failed")
-        
-        # Fallback to direct method
-        self.logger.info(self.get_text("falling_back_to_direct"))
-        try:
-            self._prepare_mcu_for_shutdown()
-            time.sleep(1)
-            self._power_off_direct()
-        except Exception as e:
-            self.logger.error(f"Direct method also failed: {str(e)}")
-            self.state = "error"
-                
-    def _power_off_direct(self):
-        """
-        Power off the printer using direct Klipper control methods
-        Éteint l'imprimante en utilisant les méthodes de contrôle directes de Klipper
+        Raises:
+            PowerOffError: If there's an error during power off
+            PowerDeviceNotAvailableError: If the power device is not available
         """
         try:
-            # Vérifier si l'imprimante est déjà arrêtée / Check if printer is already shutdown
             if self.printer.is_shutdown():
-                self.logger.warning("Printer is already shutdown, cannot execute power off command")
+                self.logger.warning("Printer is already shutdown / Imprimante déjà éteinte, commande impossible")
                 return
-                
-            if not self.device_available:
+            
+            if self.device_state != DeviceState.AVAILABLE:
+                error_msg = f"Power device '{self.power_device}' not available for power off"
                 self.logger.error(self.get_text("power_device_not_available_for_poweroff", device=self.power_device))
                 self._notify_user("power_device_not_available_for_poweroff", device=self.power_device)
-                return
+                raise PowerDeviceNotAvailableError(error_msg)
             
-            # Try to lookup power device, but handle errors gracefully
             try:
                 device_name = f'power {self.power_device}'
-                self._diagnostic_log(f"Looking up power device: {device_name}", level="info")
+                self._diagnostic_log(f"Looking up power device: {device_name} / Recherche du périphérique d'alimentation", level="info")
                 power_device = self.printer.lookup_object(device_name)
                 
-                # Make sure we have checked capabilities / S'assurer qu'on a vérifié les capacités
-                if not hasattr(self, 'optimal_method') or self.optimal_method is None:
+                # Make sure device capabilities have been checked
+                if self.optimal_method is None:
                     self._check_device_capabilities()
                 
                 # Use the optimal method determined during capability check
-                # Utiliser la méthode optimale déterminée pendant la vérification des capacités
-                if self.optimal_method == 'set_power':
-                    self._diagnostic_log("Using set_power(0) method")
+                if self.optimal_method == PowerOffMethod.SET_POWER:
+                    self._diagnostic_log("Using set_power(0) method / Utilisation de la méthode set_power(0)", level="info")
                     power_device.set_power(0)
                     self.logger.info(self.get_text("powered_off_set_power"))
                     self._notify_user("power_off_success")
-                elif self.optimal_method == 'turn_off':
-                    self._diagnostic_log("Using turn_off() method")
+                
+                elif self.optimal_method == PowerOffMethod.TURN_OFF:
+                    self._diagnostic_log("Using turn_off() method / Utilisation de la méthode turn_off()", level="info")
                     power_device.turn_off()
                     self.logger.info(self.get_text("powered_off_turn_off"))
                     self._notify_user("power_off_success")
-                elif self.optimal_method == 'power_off':
-                    self._diagnostic_log("Using power_off() method")
+                
+                elif self.optimal_method == PowerOffMethod.POWER_OFF:
+                    self._diagnostic_log("Using power_off() method / Utilisation de la méthode power_off()", level="info")
                     power_device.power_off()
                     self.logger.info(self.get_text("powered_off_power_off"))
                     self._notify_user("power_off_success")
-                elif self.optimal_method == 'cmd_off':
-                    self._diagnostic_log("Using GCODE POWER_OFF command")
+                
+                elif self.optimal_method == PowerOffMethod.CMD_OFF:
+                    self._diagnostic_log("Using GCODE POWER_OFF command / Utilisation de la commande GCODE POWER_OFF", level="info")
                     gcode = self.printer.lookup_object('gcode')
                     gcode.run_script_from_command(f"POWER_OFF {self.power_device}")
                     self.logger.info(self.get_text("powered_off_gcode"))
                     self._notify_user("power_off_success")
+                
                 else:
+                    error_msg = "No valid power off method available"
                     self.logger.error(self.get_text("no_power_off_method"))
                     self._notify_user("no_power_off_method")
-                self.state = "off"
+                    raise PowerOffError(error_msg)
                 
+                self.state = "off"
+            
             except self.printer.config_error as e:
-                # Device not found in Klipper but might be in Moonraker
-                self.logger.warning(f"Power device not found in Klipper: {str(e)}")
+                self.logger.warning(f"Power device not found in Klipper: {str(e)} / Périphérique non trouvé dans Klipper")
                 self._diagnostic_log(f"Power device lookup failed: {str(e)}", level="warning")
                 
-                # Fall back to use GCODE POWER_OFF if available
+                # Try using GCODE POWER_OFF as fallback
                 try:
                     gcode = self.printer.lookup_object('gcode')
-                    self._diagnostic_log("Using GCODE POWER_OFF command as fallback", level="info")
+                    self._diagnostic_log("Using GCODE POWER_OFF command as fallback / Utilisation de la commande GCODE POWER_OFF en solution de repli", level="info")
                     gcode.run_script_from_command(f"POWER_OFF {self.power_device}")
                     self.logger.info(self.get_text("powered_off_gcode"))
                     self._notify_user("power_off_success")
                     self.state = "off"
                     return
+                
                 except Exception as gcode_error:
-                    self.logger.error(f"Failed to use GCODE POWER_OFF command: {str(gcode_error)}")
-                    self._notify_user("power_off_failed", error="Could not find power device in Klipper")
+                    error_msg = f"Failed to use GCODE POWER_OFF command: {str(gcode_error)}"
+                    self.logger.error(f"{error_msg} / Échec de la commande GCODE POWER_OFF")
+                    self._notify_user("power_off_failed", error="Could not find power device in Klipper / Périphérique non trouvé dans Klipper")
                     self.state = "error"
-                    return
+                    raise PowerOffError(error_msg) from gcode_error
             
             except Exception as e:
-                # Si c'est un type d'erreur expected lors de l'extinction (MCU déconnecté)
-                # If it's an expected error type during shutdown (MCU disconnected)
                 error_str = str(e).lower()
-                if (
-                    "command request" in error_str or 
-                    "shutdown" in error_str or 
-                    "disconnected" in error_str
-                ):
-                    self._diagnostic_log("Extinction normale avec déconnexion MCU détectée", level="info")
+                
+                # Check if this is an expected error during shutdown
+                if ("command request" in error_str or "shutdown" in error_str or "disconnected" in error_str):
+                    self._diagnostic_log("Normal shutdown with MCU disconnect detected / Extinction normale avec déconnexion MCU détectée", level="info")
                     self.state = "off"
                     return
-                # Pour les autres erreurs, c'est un problème réel
-                # For other errors, it's a real problem
+                
+                # Otherwise, it's a real error
+                error_msg = f"Error during power off: {str(e)}"
                 self.logger.error(self.get_text("error_powering_off", error=str(e)))
-                self._diagnostic_log(f"Error details: {str(e)}", level="error", data=e)
+                self._diagnostic_log(error_msg, level="error", data=e)
                 self._notify_user("power_off_failed", error=str(e))
                 self.state = "error"
-                
+                raise PowerOffError(error_msg) from e
+        
+        except (PowerDeviceNotAvailableError, PowerOffError):
+            # Re-raise these specific exceptions
+            raise
+        
         except Exception as e:
             error_str = str(e).lower()
-            if (
-                "command request" in error_str or 
-                "shutdown" in error_str or 
-                "disconnected" in error_str
-            ):
-                self._diagnostic_log("Extinction normale avec déconnexion MCU détectée", level="info")
+            
+            # Check if this is an expected error during shutdown
+            if ("command request" in error_str or "shutdown" in error_str or "disconnected" in error_str):
+                self._diagnostic_log("Normal shutdown with MCU disconnect detected / Extinction normale avec déconnexion MCU détectée", level="info")
                 self.state = "off"
                 return
-            self.logger.error(f"Unhandled exception during direct power off: {str(e)}")
-            self._diagnostic_log(f"Direct power off exception details: {str(e)}", level="error", data=e)
+            
+            error_msg = f"Unhandled exception during direct power off: {str(e)}"
+            self.logger.error(error_msg)
+            self._diagnostic_log(error_msg, level="error", data=e)
             self.state = "error"
-            return
+            raise PowerOffError(error_msg) from e
 
-    def _notify_user(self, message_key, **kwargs):
+    def _notify_user(self, message_key: str, **kwargs) -> None:
         """
-        Send notification to user via GCODE response
-        Envoyer une notification à l'utilisateur via une réponse GCODE
+        Send notification to user via GCODE response.
         
-        Parameters:
-        - message_key: Key for the message in translations / Clé pour le message dans les traductions
-        - kwargs: Format parameters for the message / Paramètres de formatage pour le message
+        Args:
+            message_key: The message key for translation
+            **kwargs: Format parameters for the message
+            
+        Returns:
+            None
         """
-        # Vérifier si le MCU est connecté / Check if MCU is connected
         if not self._is_mcu_connected():
-            # Simplement journaliser le message au lieu d'essayer de l'envoyer à l'utilisateur
-            # Simply log the message instead of trying to send it to the user
             message = self.get_text(message_key, **kwargs)
             self.logger.info(f"User notification (not sent due to MCU state): {message}")
             return
-
-
+        
         try:
-            # Get message text from translations
-            # Obtenir le texte du message depuis les traductions
             message = self.get_text(message_key, **kwargs)
-            
-            # Try to send GCODE message to display to user
-            # Essayer d'envoyer un message GCODE à afficher à l'utilisateur
             gcode = self.printer.lookup_object('gcode')
             gcode.respond_info(message)
             
-            # Also try to send to the display if available
-            # Essayer aussi d'envoyer à l'écran si disponible
             try:
                 display = self.printer.lookup_object('display', None)
                 if display:
-                    self._diagnostic_log("Sending notification to display")
-                    # Format message for display (shorter)
-                    # Formater le message pour l'affichage (plus court)
+                    self._diagnostic_log("Sending notification to display / Envoi de notification à l'écran", level="info")
                     short_msg = message[:40] + "..." if len(message) > 40 else message
                     gcode.run_script_from_command(f"M117 {short_msg}")
             except Exception as display_err:
-                self._diagnostic_log(f"Could not send to display: {str(display_err)}")
-                
+                self._diagnostic_log(f"Could not send to display: {str(display_err)}", level="warning")
+        
         except Exception as e:
-            # Just log this error, don't try to notify about notification failure
-            # Journaliser cette erreur, ne pas essayer de notifier d'un échec de notification
             self.logger.warning(f"Failed to send notification to user: {str(e)}")
-    
-    def _update_temps(self, eventtime):
-        """Update temperatures for status API / Met à jour les températures pour l'API de status"""
-        try:
-            temps = {}
+
+    def _update_temps(self, eventtime: float) -> float:
+        """
+        Update temperatures for status API.
+        
+        Args:
+            eventtime: Current event time from Klipper
             
-            # Méthode simple et directe pour récupérer les températures
-            # Ces informations sont visibles dans les statistiques de Klipper
+        Returns:
+            float: Time for next update
+        """
+        temps: Dict[str, float] = {}
+        
+        try:
+            # Try to get extruder temperature
             try:
                 extruder = self.printer.lookup_object('extruder')
                 if extruder and hasattr(extruder, 'get_status'):
@@ -1017,7 +1246,8 @@ class AutoPowerOff:
                         temps['hotend'] = status['temperature']
             except Exception as e:
                 self.logger.debug(f"Error getting extruder temp: {str(e)}")
-                
+            
+            # Try to get bed temperature
             try:
                 heater_bed = self.printer.lookup_object('heater_bed')
                 if heater_bed and hasattr(heater_bed, 'get_status'):
@@ -1027,18 +1257,17 @@ class AutoPowerOff:
             except Exception as e:
                 self.logger.debug(f"Error getting bed temp: {str(e)}")
             
-            # Valeurs par défaut si non trouvées
+            # Fallback for extruder temperature
             if 'hotend' not in temps:
-                # Récupérer de manière alternative via les statistiques
                 try:
                     stats = self.printer.lookup_object('extruder').stats(eventtime)
                     if 'temp' in stats:
                         temps['hotend'] = stats['temp']
                 except:
                     temps['hotend'] = 0.0
-                    
+            
+            # Fallback for bed temperature
             if 'bed' not in temps:
-                # Récupérer de manière alternative via les statistiques
                 try:
                     stats = self.printer.lookup_object('heater_bed').stats(eventtime)
                     if 'temp' in stats:
@@ -1047,16 +1276,24 @@ class AutoPowerOff:
                     temps['bed'] = 0.0
             
             self.last_temps = temps
-                
+        
         except Exception as e:
             self.logger.error(f"Error updating temperatures: {str(e)}")
-            
-        # Schedule next update in 1 second / Planifier la prochaine mise à jour dans 1 seconde
-        return eventtime + 1.0
         
-    def get_status(self, eventtime):
-        """Get status for Fluidd/Mainsail API / Obtenir le statut pour l'API Fluidd/Mainsail"""
-        time_left = max(0, self.countdown_end - eventtime) if self.shutdown_timer is not None else 0
+        # Schedule next update in 1 second
+        return eventtime + 1.0
+
+    def get_status(self, eventtime: float) -> Dict[str, Any]:
+        """
+        Get status for Fluidd/Mainsail API.
+        
+        Args:
+            eventtime: Current event time from Klipper
+            
+        Returns:
+            dict: Status information for the UI
+        """
+        time_left = max(0, self.countdown_end - self.reactor.monotonic()) if self.shutdown_timer is not None else 0
         
         return {
             'enabled': self.enabled,
@@ -1067,67 +1304,68 @@ class AutoPowerOff:
             'current_temps': self.last_temps,
             'language': self.lang,
             'diagnostic_mode': self.diagnostic_mode,
-            'device_available': self.device_available,
+            'device_available': self.device_state == DeviceState.AVAILABLE,
             'dry_run_mode': self.dry_run_mode,
-            'optimal_method': self.optimal_method,
-            'device_capabilities': self.device_capabilities
+            'optimal_method': self.optimal_method.name if self.optimal_method else None,
+            'device_capabilities': self.device_capabilities,
+            'state': self.state
         }
-        
-    cmd_AUTO_POWEROFF_help = "Configure or trigger automatic printer power off / Configure ou déclenche l'extinction automatique de l'imprimante"
-    
-    def cmd_AUTO_POWEROFF(self, gcmd):
-        """GCODE command to configure or trigger automatic power off / Commande GCODE pour configurer ou déclencher l'extinction automatique"""
-        # Vérifier si le MCU est connecté pour les commandes qui interagissent avec le matériel
-        # Check if MCU is connected for commands that interact with hardware
-        option = gcmd.get('OPTION', 'status').lower()
 
-        # Ces options peuvent fonctionner sans MCU / These options can work without MCU
+    cmd_AUTO_POWEROFF_help = "Configure or trigger automatic printer power off / Configure ou déclenche l'extinction automatique de l'imprimante"
+
+    def cmd_AUTO_POWEROFF(self, gcmd) -> None:
+        """
+        GCODE command to configure or trigger automatic power off.
+        
+        Args:
+            gcmd: GCODE command object
+            
+        Returns:
+            None
+        """
+        option = gcmd.get('OPTION', 'status').lower()
+        
+        # Check which options can work without MCU
         if option in ['language', 'status', 'diagnostic', 'dryrun']:
-            # Traiter ces options normalement / Process these options normally
             pass
         else:
-            # Pour les autres options qui interagissent avec le matériel
-            # For other options that interact with hardware
             if not self._is_mcu_connected() and option in ['now', 'start']:
-                gcmd.respond_info("MCU communication not possible, cannot execute hardware-related command")
+                gcmd.respond_info("MCU communication not possible, cannot execute hardware-related command / Communication MCU impossible, commande liée au matériel non exécutée")
                 return
-
-         # Added language option / Ajout de l'option de langue
+        
+        # Handle language option
         if option == 'language':
             lang_value = gcmd.get('VALUE', '').lower()
-            if lang_value in ['en', 'fr']:
+            if lang_value in [lang.value for lang in Language]:
                 self.lang = lang_value
                 self._save_persistent_language(self.lang)
-                self._load_translations()  # Reload translations with new language
+                self._load_translations()
                 gcmd.respond_info(self.get_text("language_set"))
             else:
                 gcmd.respond_info(self.get_text("language_not_recognized", lang_value=lang_value))
             return
         
+        # Handle on/off options
         if option == 'on':
-            # Globally enable auto power off / Activer globalement l'extinction automatique
             self.enabled = True
             gcmd.respond_info(self.get_text("auto_power_off_enabled"))
-                
+        
         elif option == 'off':
-            # Globally disable auto power off / Désactiver globalement l'extinction automatique
             self.enabled = False
             if self.shutdown_timer is not None:
                 self.reactor.unregister_timer(self.shutdown_timer)
                 self.shutdown_timer = None
             gcmd.respond_info(self.get_text("auto_power_off_disabled"))
-                
+        
         elif option == 'now':
-            # Trigger power off immediately / Déclencher l'extinction immédiatement
             gcmd.respond_info(self.get_text("powering_off"))
-            # Small delay to allow gcode response to be sent / Petit délai pour permettre à la réponse de gcode d'être envoyée
             self.reactor.register_callback(lambda e: self._power_off())
         
         elif option == 'start':
-            # Start the idle timer / Démarrer le minuteur d'inactivité
             if not self.enabled:
                 gcmd.respond_info(self.get_text("auto_power_off_globally_disabled"))
                 return
+            
             if self.shutdown_timer is None:
                 waketime = self.reactor.monotonic() + self.idle_timeout
                 self.countdown_end = self.reactor.monotonic() + self.idle_timeout
@@ -1135,25 +1373,23 @@ class AutoPowerOff:
                 gcmd.respond_info(self.get_text("timer_started"))
             else:
                 gcmd.respond_info(self.get_text("timer_already_active"))
-                
+        
         elif option == 'cancel':
-            # Cancel the idle timer / Annuler le minuteur d'inactivité
             if self.shutdown_timer is not None:
                 self.reactor.unregister_timer(self.shutdown_timer)
                 self.shutdown_timer = None
                 gcmd.respond_info(self.get_text("timer_canceled"))
             else:
                 gcmd.respond_info(self.get_text("no_active_timer"))
-            
+        
         elif option == 'status':
-            # Display current status / Afficher l'état actuel
-            enabled_status = self.get_text("enabled_status" if self.enabled else "disabled_status")
-            timer_status = self.get_text("timer_active" if self.shutdown_timer is not None else "timer_inactive")
+            enabled_status = self.get_text("enabled_status") if self.enabled else self.get_text("disabled_status")
+            timer_status = self.get_text("timer_active") if self.shutdown_timer is not None else self.get_text("timer_inactive")
             
-            if self.lang == 'fr':
-                temps = f"Buse: {self.last_temps['hotend']:.1f}°C, Lit: {self.last_temps['bed']:.1f}°C"
+            if self.lang == Language.FRENCH.value:
+                temps = f"Buse: {self.last_temps.get('hotend', 0):.1f}°C, Lit: {self.last_temps.get('bed', 0):.1f}°C"
             else:
-                temps = f"Hotend: {self.last_temps['hotend']:.1f}°C, Bed: {self.last_temps['bed']:.1f}°C"
+                temps = f"Hotend: {self.last_temps.get('hotend', 0):.1f}°C, Bed: {self.last_temps.get('bed', 0):.1f}°C"
             
             time_left = max(0, self.countdown_end - self.reactor.monotonic())
             countdown = f"{int(time_left / 60)}m {int(time_left % 60)}s" if self.shutdown_timer is not None else "N/A"
@@ -1166,30 +1402,35 @@ class AutoPowerOff:
                 temp_threshold=self.temp_threshold,
                 idle_timeout=int(self.idle_timeout / 60)
             ))
-
+        
         elif option == 'diagnostic':
-            # Enable or disable diagnostic mode / Activer ou désactiver le mode diagnostic
             diag_mode = gcmd.get_int('VALUE', 1, minval=0, maxval=1)
             self.diagnostic_mode = bool(diag_mode)
+            
             if self.diagnostic_mode:
                 gcmd.respond_info(self.get_text("diagnostic_mode_enabled"))
-                self.logger.info("Diagnostic mode enabled by user")
+                self.logger.info("Diagnostic mode enabled by user / Mode diagnostique activé par l'utilisateur")
             else:
                 gcmd.respond_info(self.get_text("diagnostic_mode_disabled"))
-                self.logger.info("Diagnostic mode disabled by user")
-
+                self.logger.info("Diagnostic mode disabled by user / Mode diagnostique désactivé par l'utilisateur")
+        
         elif option == 'dryrun':
             dry_run_value = gcmd.get_int('VALUE', 1, minval=0, maxval=1)
             self.dry_run_mode = bool(dry_run_value)
+            
             if self.dry_run_mode:
                 gcmd.respond_info(self.get_text("dry_run_enabled"))
-                self.logger.info("Dry run mode enabled by user")
+                self.logger.info("Dry run mode enabled by user / Mode simulation activé par l'utilisateur")
             else:
                 gcmd.respond_info(self.get_text("dry_run_disabled"))
-                self.logger.info("Dry run mode disabled by user")
-                
+                self.logger.info("Dry run mode disabled by user / Mode simulation désactivé par l'utilisateur")
+        
+        elif option == 'version':
+            gcmd.respond_info(f"Auto Power Off version: {__version__}")
+        
         else:
             gcmd.respond_info(self.get_text("option_not_recognized"))
+
 
 def load_config(config):
     return AutoPowerOff(config)

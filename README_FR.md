@@ -15,6 +15,9 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 - Fonctionne avec n'importe quel périphérique d'alimentation contrôlé par GPIO
 - Compatible avec tous les types de dispositifs d'alimentation Moonraker (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
 - Focalisé sur l'interface web : les menus LCD ont été supprimés pour plus de simplicité
+- **Nouveau** - Gestion d'erreurs améliorée et capacités de diagnostic
+- **Nouveau** - Support amélioré des périphériques réseau avec test de connexion robuste
+- **Nouveau** - Implémentation à typage sûr avec exceptions structurées
 
 ## Prérequis
 
@@ -39,6 +42,8 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
 - La configuration nécessite que votre périphérique soit correctement configuré dans la configuration de Moonraker
 - Fiabilité et compatibilité améliorées avec les périphériques d'alimentation réseau
 - Les entrées du menu LCD ont été supprimées pour se concentrer sur l'intégration de l'interface web
+- **Nouveau** - Code à typage sûr et structuré avec gestion d'erreurs améliorée
+- **Nouveau** - Meilleurs outils de diagnostic pour le dépannage
 
 ## Installation
 
@@ -110,49 +115,70 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
    [include mainsail/auto_power_off.cfg]
    ```
 
-4. Redémarrez Klipper :
+4. Ajoutez ce qui suit à votre fichier `moonraker.conf` :
+   ```
+   [update_manager auto_power_off]
+   type: git_repo
+   path: ~/auto_power_off
+   origin: https://github.com/JayceeB1/klipper-auto-power-off.git
+   primary_branch: main
+   install_script: scripts/install.sh
+   managed_services: klipper
+   ```
+
+5. Redémarrez Klipper :
    ```bash
    sudo systemctl restart klipper
    ```
 
-## Désinstallation
+## Mise à jour automatique avec Moonraker
 
-Si vous avez besoin de désinstaller le module Auto Power Off, suivez ces étapes:
+Auto Power Off prend désormais en charge les mises à jour automatiques via le gestionnaire de mise à jour de Moonraker. Cela vous permet de mettre à jour le module directement depuis l'interface Fluidd ou Mainsail, comme les autres composants de votre firmware d'imprimante 3D.
 
-1. Supprimez les fichiers du module:
+### Configuration automatique pendant l'installation
+
+Lors de l'exécution du script d'installation, vous serez invité à ajouter la configuration du gestionnaire de mise à jour à votre fichier `moonraker.conf`. Cette configuration :
+
+1. Crée un dépôt Git local pour les fichiers du module
+2. Ajoute la configuration du gestionnaire de mise à jour à `moonraker.conf`
+3. Configure le dépôt pour suivre les mises à jour du projet principal
+
+### Configuration manuelle pour les installations existantes
+
+Si vous disposez d'une installation existante et souhaitez ajouter la prise en charge du gestionnaire de mise à jour :
+
+1. Exécutez à nouveau le script d'installation :
    ```bash
-   # Supprimer le module Python principal
-   rm ~/klipper/klippy/extras/auto_power_off.py
-   
-   # Supprimer le répertoire des traductions
-   rm -rf ~/klipper/klippy/extras/auto_power_off_langs
-   
-   # Supprimer les fichiers de configuration UI (selon votre interface)
-   rm ~/printer_data/config/fluidd/auto_power_off*.cfg
-   rm ~/printer_data/config/mainsail/auto_power_off*.cfg
-   
-   # Supprimer le fichier de persistance de langue
-   rm ~/printer_data/config/auto_power_off_language.conf
+   wget -O install.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
+   chmod +x install.sh
+   ./install.sh
    ```
 
-2. Modifiez votre fichier printer.cfg pour supprimer toute la section [auto_power_off] et les lignes d'inclusion associées.
+2. Choisissez "o" lorsqu'on vous demande d'ajouter la configuration du gestionnaire de mise à jour
 
-   ```
-   [auto_power_off]
-   idle_timeout: 600
-   temp_threshold: 40
-   ...
+### Configuration du gestionnaire de mise à jour
 
-   [include fluidd/auto_power_off.cfg]
-   [include mainsail/auto_power_off.cfg]
-   ```
+La configuration suivante sera ajoutée à votre `moonraker.conf` :
 
-3. Redémarrez Klipper:
+```ini
+[update_manager auto_power_off]
+type: git_repo
+path: ~/auto_power_off
+origin: https://github.com/JayceeB1/klipper-auto-power-off.git
+primary_branch: main
+install_script: scripts/install.sh
+managed_services: klipper
+```
 
-   ```bash
-   sudo systemctl restart klipper
-   ```
+### Mise à jour via Fluidd/Mainsail
 
+Une fois configuré, vous pouvez mettre à jour Auto Power Off directement depuis l'interface Fluidd ou Mainsail :
+
+1. Accédez à l'onglet "Machine" ou "Système"
+2. Recherchez "Auto Power Off" dans la section des mises à jour
+3. Cliquez sur "Mettre à jour" lorsqu'une nouvelle version est disponible
+
+Les mises à jour seront appliquées automatiquement et Klipper sera redémarré pour charger le module mis à jour.
 
 
 ## Configuration
@@ -180,109 +206,39 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | `network_test_attempts` | 3 | Nombre de tentatives pour tester la connectivité du périphérique réseau |
 | `network_test_interval` | 1.0 | Intervalle en secondes entre les tentatives de test de connectivité réseau |
 
+## Nouvelles fonctionnalités dans la v2.0
 
-## Utilisation
+### Gestion d'erreurs améliorée
 
-### Interface Fluidd
+Le module propose désormais une gestion d'erreurs robuste avec une hiérarchie d'exceptions structurée :
 
-Une fois installé, vous verrez un panneau "Extinction Automatique" dans votre interface Fluidd qui vous permettra de :
-- Activer/désactiver la fonctionnalité d'extinction automatique
-- Voir le compte à rebours et les températures actuelles
-- Démarrer/annuler manuellement le minuteur d'extinction
-- Éteindre immédiatement l'imprimante (avec confirmation)
+- Meilleure communication des erreurs pour les problèmes de connectivité réseau
+- Distinction claire entre les différents types d'erreurs (périphérique, API Moonraker, réseau)
+- Journalisation améliorée des diagnostics pour le dépannage
 
-### Interface Mainsail
+### Implémentation à typage sûr
 
-Pour Mainsail, vous aurez accès à :
-- Un ensemble de commandes GCODE pour contrôler l'extinction automatique
-- Des boutons GPIO configurables pour contrôler la fonction (si vous configurez les GPIO)
+- Annotations de type complètes pour une meilleure maintenabilité du code
+- Énumérations pour les états et méthodes pour une meilleure fiabilité
+- API propre pour l'intégration avec l'écosystème Klipper
 
-### Intégration dans le G-code de fin
+### Support avancé des périphériques réseau
 
-Pour activer l'extinction automatique uniquement pour certaines impressions, ajoutez ceci au G-code de fin de votre trancheur :
+- Tests complets des périphériques réseau avant les tentatives d'extinction
+- Mécanisme de nouvelle tentative configurable pour les environnements réseau peu fiables
+- Amélioration du fallback vers des méthodes directes lorsque les périphériques réseau sont injoignables
 
-```
-AUTO_POWEROFF ON  ; Active l'extinction automatique
-AUTO_POWEROFF START  ; Démarre le compte à rebours
-```
+### Diagnostics améliorés
 
-### Commandes GCODE
+- Mode de diagnostic amélioré avec journalisation détaillée
+- Meilleure communication des capacités des périphériques
+- Informations d'état claires à travers l'interface utilisateur
 
-Les commandes GCODE suivantes sont disponibles :
+### Améliorations du support multilingue
 
-- `AUTO_POWEROFF ON` - Active globalement la fonction
-- `AUTO_POWEROFF OFF` - Désactive globalement la fonction
-- `AUTO_POWEROFF START` - Démarre manuellement le minuteur
-- `AUTO_POWEROFF CANCEL` - Annule le minuteur en cours
-- `AUTO_POWEROFF NOW` - Éteint immédiatement l'imprimante
-- `AUTO_POWEROFF STATUS` - Affiche l'état détaillé
-- `AUTO_POWEROFF LANGUAGE VALUE=en` - Définir la langue sur l'anglais
-- `AUTO_POWEROFF LANGUAGE VALUE=fr` -  Définir la langue sur le français
-- `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Activer le mode diagnostic pour le dépannage (0 pour désactiver)
-- `AUTO_POWEROFF DRYRUN VALUE=1` - Activer le mode simulation qui simule l'extinction (0 pour désactiver)
-
-## Intégration avec Moonraker (Avancé)
-
-Auto Power Off peut fonctionner en tandem avec le module Power de Moonraker pour offrir un contrôle d'alimentation complet :
-
-- **Auto Power Off** gère l'extinction basée sur la température et le délai d'inactivité après une impression
-- **Moonraker Power** peut gérer l'allumage avant l'impression et prendre en charge différents types de dispositifs d'alimentation
-
-Cette intégration vous permet de :
-- Utiliser les broches GPIO du SBC ou différents types de prises intelligentes
-- Allumer automatiquement l'imprimante lorsqu'une impression est lancée
-- Redémarrer automatiquement Klipper après la mise sous tension
-- Maintenir la protection contre l'extinction pendant l'impression
-
-### Configuration
-
-1. **Configurez le module Power dans `moonraker.conf`**:
-
-   ```ini
-   [power printer]
-   type: gpio                     # Type de dispositif: gpio, tplink_smartplug, tasmota, etc.
-   pin: gpio27                    # Pour GPIO uniquement: broche à utiliser
-   # address: 192.168.1.123       # Pour les appareils réseau: adresse IP
-   off_when_shutdown: True
-   initial_state: off
-   on_when_job_queued: True       # Allumer quand une impression est lancée
-   locked_while_printing: True    # Empêche l'extinction pendant l'impression
-   restart_klipper_when_powered: True
-   restart_delay: 3
-   ```
-
-   > **Note importante**: Dans les versions récentes de Moonraker, l'option `off_when_job_complete` n'est plus disponible. Le module Auto Power Off prend en charge cette fonctionnalité, ce qui permet une extinction intelligente basée sur les températures et l'inactivité.
-
-2. **Activez l'intégration dans `printer.cfg`**:
-
-   ```ini
-   [auto_power_off]
-   idle_timeout: 600              # Temps d'inactivité en secondes
-   temp_threshold: 40             # Seuil de température en °C
-   power_device: printer          # Doit correspondre au nom dans [power printer]
-   moonraker_integration: True    # Activer l'intégration Moonraker
-   moonraker_url: http://localhost:7125  # URL de l'API Moonraker (optionnel)
-   ```
-
-### Comportement attendu
-
-1. Quand une impression est mise en file d'attente, Moonraker allume l'imprimante.
-2. Klipper redémarre automatiquement après la mise sous tension.
-3. L'imprimante ne peut pas être éteinte pendant l'impression (verrouillée).
-4. Quand l'impression est terminée, Auto Power Off prend le contrôle et surveille:
-   - Le délai d'inactivité configuré
-   - Les températures de l'extrudeur et du lit
-5. Une fois les conditions remplies, Auto Power Off éteint l'imprimante.
-
-### Types de dispositifs pris en charge
-
-Cette intégration fonctionne avec tous les types de dispositifs supportés par Moonraker, notamment:
-- Broches GPIO des Raspberry Pi et autres SBC
-- Prises intelligentes TP-Link
-- Dispositifs Tasmota, Shelly, HomeSeer
-- Et plusieurs autres options...
-
-Consultez la [documentation de Moonraker](https://moonraker.readthedocs.io/en/latest/configuration/#power) pour la liste complète des options.
+- Détection et persistance de la langue plus robustes
+- Meilleure gestion du chargement des traductions
+- Messages d'erreur plus clairs en français et en anglais
 
 ## Dépannage
 
@@ -302,22 +258,6 @@ Si CURL n'est pas installé, vous pouvez l'installer avec :
 sudo apt-get install curl
 ```
 
-#### Périphérique d'alimentation non trouvé
-
-Si vous voyez une erreur comme "Périphérique d'alimentation 'psu_control' introuvable" :
-
-1. Assurez-vous d'avoir défini une section `[power]` dans votre configuration Klipper
-2. Vérifiez que le paramètre `power_device` dans `[auto_power_off]` correspond au nom dans votre section `[power]`
-3. Vérifiez que le périphérique d'alimentation est correctement configuré et fonctionnel en consultant son état dans l'interface Fluidd/Mainsail (dans l'onglet Machine)
-
-#### Problèmes de connectivité des périphériques réseau
-
-Si vous utilisez un périphérique d'alimentation réseau (comme une prise intelligente) et rencontrez des problèmes de connectivité :
-
-1. Vérifiez que vous pouvez ping le périphérique depuis votre hôte Klipper
-2. Assurez-vous d'avoir défini `network_device: True` et fourni la bonne `device_address`
-3. Vérifiez les paramètres de pare-feu qui pourraient bloquer la communication
-
 #### Test avec le mode simulation
 
 Pour tester en toute sécurité la fonctionnalité d'extinction automatique sans réellement éteindre votre imprimante :
@@ -335,51 +275,25 @@ Pour comprendre quelles capacités votre périphérique d'alimentation possède 
 3. Les logs montreront quelles méthodes sont disponibles pour votre périphérique
 4. Cela aide à résoudre pourquoi l'extinction pourrait ne pas fonctionner
 
-### Périphériques compatibles
+## Pour les développeurs
 
-Le module a été testé avec les types de périphériques d'alimentation suivants :
+### Structure du code
 
-| Type de périphérique | Compatibilité | Notes |
-|-------------|---------------|-------|
-| GPIO Raspberry Pi | Excellente | Contrôle direct via les broches GPIO |
-| Prises intelligentes TP-Link | Bonne | Nécessite une connectivité réseau |
-| Dispositifs Tasmota | Bonne | Nécessite une connectivité réseau |
-| Dispositifs Shelly | Bonne | Nécessite une connectivité réseau |
-| Prises intelligentes via MQTT | Bonne | Nécessite l'intégration Moonraker |
-| Cartes relais USB | Bonne | Lorsque configurées comme périphériques GPIO |
+Le code refactorisé utilise désormais une architecture plus maintenable :
 
-## Utilisation avancée
+- Hiérarchie d'exceptions structurée pour une meilleure gestion des erreurs
+- Annotations de type pour un meilleur support IDE et sécurité du code
+- Énumérations pour les états et méthodes pour une meilleure structure du code
+- Séparation claire des préoccupations dans le code
 
-### Configuration des périphériques réseau
+### Contribution
 
-Pour les périphériques d'alimentation basés sur le réseau (comme les prises intelligentes), une configuration supplémentaire est recommandée :
+Avant de soumettre des pull requests, assurez-vous de :
 
-```ini
-[auto_power_off]
-network_device: True  # Indiquer qu'il s'agit d'un périphérique réseau
-device_address: 192.168.1.123  # Adresse IP de votre prise intelligente
-network_test_attempts: 5  # Augmenter les tentatives pour les réseaux peu fiables
-network_test_interval: 2.0  # Attendre 2 secondes entre les tentatives de connexion
-dry_run_mode: False  # Mettre à True initialement pour les tests
-```
-
-Cette configuration active les tests de connectivité avant de tenter d'éteindre, améliorant la fiabilité avec les périphériques d'alimentation basés sur le réseau.
-
-## Support linguistique
-
-Ce module est disponible en :
-- Français (ce document)
-- Anglais (voir [README.md](README.md))
-
-### Ajouter de nouvelles langues
-
-Le module prend désormais en charge les traductions via des fichiers de langue externes. Pour ajouter une nouvelle langue :
-
-1. Créez un nouveau fichier JSON dans le répertoire `auto_power_off_langs` nommé d'après le code de langue (par exemple, `de.json` pour l'allemand)
-2. Copiez la structure d'un fichier de langue existant et traduisez tous les messages
-3. Ajoutez le nouveau code de langue à la liste de validation dans la méthode `_configure_language`
-4. La nouvelle langue sera disponible en utilisant `language: de` dans la configuration ou via une commande GCODE
-
+1. Suivre le style de codage à typage sûr
+2. Maintenir la compatibilité ascendante
+3. Mettre à jour la documentation pour toute nouvelle fonctionnalité
+4. Tester les modifications avec diverses configurations
 
 ## Licence
 

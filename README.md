@@ -16,6 +16,9 @@ A Klipper module that automatically powers off your 3D printer after a completed
 - Available in English and French
 - Compatible with all Moonraker power device types (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
 - Web interface focused: LCD menus have been removed for simplicity
+- **New** - Enhanced error handling and diagnostic capabilities
+- **New** - Improved network device support with robust connection testing
+- **New** - Type-safe implementation with structured exceptions
 
 ## Requirements
 
@@ -40,6 +43,8 @@ As of the latest version, Auto Power Off works primarily through Moonraker's pow
 - Configuration requires your device to be properly set up in Moonraker's config
 - Improved reliability and compatibility with network-based power devices
 - LCD menu entries have been removed to focus on web interface integration
+- **New** - Structured type-safe code with enhanced error handling
+- **New** - Better diagnostic tools for troubleshooting
 
 ## Installation
 
@@ -47,22 +52,22 @@ As of the latest version, Auto Power Off works primarily through Moonraker's pow
 
 1. Download the installation script:
    ```bash
-   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off.sh
+   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
    ```
 
 2. Make it executable:
    ```bash
-   chmod +x install_auto_power_off.sh
+   chmod +x install.sh
    ```
 
 3. Run the script:
    ```bash
    # Run with default language (English)
-   ./install_auto_power_off.sh
+   ./install.sh
 
    # Or specify a language
-   ./install_auto_power_off.sh --en  # English
-   ./install_auto_power_off.sh --fr  # French
+   ./install.sh --en  # English
+   ./install.sh --fr  # French
    ```
 
 4. Follow the on-screen instructions.
@@ -111,47 +116,71 @@ As of the latest version, Auto Power Off works primarily through Moonraker's pow
    [include mainsail/auto_power_off.cfg]
    ```
 
-4. Restart Klipper:
+4. Add the following to your `moonraker.conf`file:
+   ```
+   [update_manager auto_power_off]
+   type: git_repo
+   path: ~/auto_power_off
+   origin: https://github.com/JayceeB1/klipper-auto-power-off.git
+   primary_branch: main
+   install_script: scripts/install.sh
+   managed_services: klipper
+   ```
+
+5. Restart Klipper:
    ```bash
    sudo systemctl restart klipper
    ```
 
-## Uninstallation
+## Auto-Update with Moonraker
 
-If you need to uninstall the Auto Power Off module, follow these steps:
+Auto Power Off now supports automatic updates through Moonraker's update manager system. This allows you to update the module directly from the Fluidd or Mainsail interface, just like other components of your 3D printer firmware.
 
-1. Remove the module files:
+### Automatic Setup During Installation
+
+When running the installation script, you'll be prompted to add the update manager configuration to your `moonraker.conf` file. This setup:
+
+1. Creates a local Git repository for the module files
+2. Adds the update manager configuration to `moonraker.conf`
+3. Configures the repository to track updates from the main project
+
+### Manual Setup for Existing Installations
+
+If you have an existing installation and want to add update manager support:
+
+1. Run the installation script again:
    ```bash
-   # Remove the main Python module
-   rm ~/klipper/klippy/extras/auto_power_off.py
-   
-   # Remove the translations directory
-   rm -rf ~/klipper/klippy/extras/auto_power_off_langs
-   
-   # Remove UI configuration files (based on your interface)
-   rm ~/printer_data/config/fluidd/auto_power_off*.cfg
-   rm ~/printer_data/config/mainsail/auto_power_off*.cfg
-   
-   # Remove the language persistence file
-   rm ~/printer_data/config/auto_power_off_language.conf
+   wget -O install.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
+   chmod +x install.sh
+   ./install.sh
    ```
 
-2. Edit your printer.cfg file to remove the entire [auto_power_off] section and any related include lines.
+2. Choose "y" when asked about adding update manager configuration
 
-   ```
-   [auto_power_off]
-   idle_timeout: 600
-   temp_threshold: 40
-   ...
+### Update Manager Configuration
 
-   [include fluidd/auto_power_off.cfg]
-   [include mainsail/auto_power_off.cfg]
-   ```
+The following configuration will be added to your `moonraker.conf`:
 
-3. Restart Klipper
-   ```bash
-   sudo systemctl restart klipper
-   ```
+```ini
+[update_manager auto_power_off]
+type: git_repo
+path: ~/auto_power_off
+origin: https://github.com/JayceeB1/klipper-auto-power-off.git
+primary_branch: main
+install_script: scripts/install.sh
+managed_services: klipper
+```
+
+### Updating via Fluidd/Mainsail
+
+Once configured, you can update Auto Power Off directly from the Fluidd or Mainsail interface:
+
+1. Go to the "Machine" or "System" tab
+2. Look for "Auto Power Off" in the update section
+3. Click "Update" when a new version is available
+
+Updates will be applied automatically and Klipper will be restarted to load the updated module.
+
 
 ## Configuration
 
@@ -178,113 +207,39 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `network_test_attempts` | 3 | Number of attempts to test network device connectivity |
 | `network_test_interval` | 1.0 | Interval in seconds between network connectivity test attempts |
 
-## Usage
+## New Features in v2.0
 
-### Fluidd Interface
+### Enhanced Error Handling
 
-Once installed, you'll see an "Auto Power Off" panel in your Fluidd interface that allows you to:
-- Enable/disable the auto power off feature
-- See the countdown timer and current temperatures
-- Manually start/cancel the power off timer
-- Immediately power off the printer (with confirmation)
+The module now provides robust error handling with a structured exception hierarchy:
 
-### Mainsail Interface
+- Better error reporting for network connectivity issues
+- Clear distinction between different types of errors (device, Moonraker API, network)
+- Improved diagnostic logging for troubleshooting
 
-For Mainsail, you'll have access to:
-- A set of GCODE commands to control auto power off
-- Configurable GPIO buttons to control the function (if you set up the GPIO pins)
+### Type-Safe Implementation
 
-### GCODE Commands
+- Full type annotations for better code maintainability
+- Enumerations for states and methods for improved reliability
+- Clean API for integrating with Klipper's ecosystem
 
-The following GCODE commands are available:
+### Advanced Network Device Support
 
-- `AUTO_POWEROFF ON` - Globally enable the function
-- `AUTO_POWEROFF OFF` - Globally disable the function
-- `AUTO_POWEROFF START` - Manually start the timer
-- `AUTO_POWEROFF CANCEL` - Cancel the current timer
-- `AUTO_POWEROFF NOW` - Immediately power off the printer
-- `AUTO_POWEROFF STATUS` - Display detailed status
-- `AUTO_POWEROFF LANGUAGE VALUE=en` - Set language to English
-- `AUTO_POWEROFF LANGUAGE VALUE=fr` - Set language to French
-- `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Enable diagnostic mode for troubleshooting (0 to disable)
-- `AUTO_POWEROFF DRYRUN VALUE=1` - Enable dry run mode which simulates power off (0 to disable)
+- Comprehensive network device testing before power off attempts
+- Configurable retry mechanism for unreliable network environments
+- Improved fallback to direct methods when network devices are unreachable
 
-### End G-code Integration
+### Improved Diagnostics
 
-To enable auto power off only for specific prints, add this to your slicer's end G-code:
+- Enhanced diagnostic mode with detailed logging
+- Better reporting of device capabilities
+- Clear status information through the user interface
 
-```
-AUTO_POWEROFF ON  ; Enable auto power off
-AUTO_POWEROFF START  ; Start the countdown timer
-```
+### Multilingual Support Improvements
 
-## Moonraker Integration (Advanced)
-
-Auto Power Off can work in tandem with Moonraker's Power module to offer complete power control:
-
-- **Auto Power Off** handles temperature-based and idle-timeout power off after a print
-- **Moonraker Power** can handle power on before printing and support different power device types
-
-This integration allows you to:
-- Use SBC GPIO pins or different smart plug types
-- Automatically power on the printer when a print is queued
-- Automatically restart Klipper after power on
-- Maintain protection against power off during printing
-
-### Configuration
-
-```markdown
-1. **Configure the Power module in `moonraker.conf`**:
-
-   ```ini
-   [power printer]
-   type: gpio                     # Device type: gpio, tplink_smartplug, tasmota, etc.
-   pin: gpio27                    # For GPIO only: pin to use
-   # address: 192.168.1.123       # For network devices: IP address
-   off_when_shutdown: True
-   initial_state: off
-   on_when_job_queued: True       # Power on when a print is queued
-   locked_while_printing: True
-   restart_klipper_when_powered: True
-   restart_delay: 3
-   ```
-
-   > **Important note**: In recent Moonraker versions, the `off_when_job_complete` option is no longer available. The Auto Power Off module handles this functionality, providing smart shutdown based on temperatures and idle timeout settings.
-```
-
-2. **Enable integration in `printer.cfg`**:
-
-   ```ini
-   [auto_power_off]
-   idle_timeout: 600              # Idle time in seconds
-   temp_threshold: 40             # Temperature threshold in °C
-   power_device: printer          # Must match name in [power printer]
-   moonraker_integration: True    # Enable Moonraker integration
-   moonraker_url: http://localhost:7125  # Moonraker API URL (optional)
-   ```
-
-```markdown
-### Expected Behavior
-
-1. When a print is queued, Moonraker powers on the printer.
-2. Klipper automatically restarts after power on.
-3. The printer cannot be powered off during printing (locked).
-4. When the print is complete, Auto Power Off takes control and monitors:
-   - The configured idle timeout
-   - Hotend and bed temperatures
-5. Once conditions are met, Auto Power Off powers off the printer.
-```
-
-### Supported Device Types
-
-This integration works with all device types supported by Moonraker, including:
-- GPIO pins on Raspberry Pi and other SBCs
-- TP-Link Smart Plugs
-- Tasmota, Shelly, HomeSeer devices
-- And several other options...
-
-See the [Moonraker documentation](https://moonraker.readthedocs.io/en/latest/configuration/#power) for the complete list of options.
-
+- More robust language detection and persistence
+- Better handling of translation loading
+- Clearer error messages in both English and French
 
 ## Troubleshooting
 
@@ -304,22 +259,6 @@ If CURL is not installed, you can install it with:
 sudo apt-get install curl
 ```
 
-#### Power Device Not Found
-
-If you see an error like "Power device 'psu_control' not found":
-
-1. Make sure you have defined a `[power]` section in your Klipper configuration
-2. Verify that the `power_device` parameter in `[auto_power_off]` matches the name in your `[power]` section
-3. Check that the power device is properly configured and functional by viewing its status in the Fluidd/Mainsail interface (under Machine tab)
-
-#### Network Device Connectivity Issues
-
-If using a network power device (like a smart plug) and having connectivity issues:
-
-1. Verify you can ping the device from your Klipper host
-2. Make sure you have set `network_device: True` and provided the correct `device_address`
-3. Check firewall settings that might block communication
-
 #### Testing with Dry Run Mode
 
 To safely test the auto power off functionality without actually powering off your printer:
@@ -337,50 +276,25 @@ To understand what capabilities your power device has:
 3. The logs will show what methods are available for your device
 4. This helps troubleshoot why power off might not be working
 
-### Compatible Devices
+## For Developers
 
-The module has been tested with the following power device types:
+### Code Structure
 
-| Device Type | Compatibility | Notes |
-|-------------|---------------|-------|
-| Raspberry Pi GPIO | Excellent | Direct control via GPIO pins |
-| TP-Link Smart Plugs | Good | Requires network connectivity |
-| Tasmota Devices | Good | Requires network connectivity |
-| Shelly Devices | Good | Requires network connectivity |
-| Smart Plugs via MQTT | Good | Requires Moonraker integration |
-| USB Relay Boards | Good | When configured as GPIO devices |
+The refactored code now uses a more maintainable architecture:
 
-## Advanced Usage
+- Structured exception hierarchy for better error handling
+- Type annotations for improved IDE support and code safety
+- Enumerations for states and methods for better code structure
+- Clear separation of concerns in the codebase
 
-### Network Device Configuration
+### Contributing
 
-For network-based power devices (such as smart plugs), additional configuration is recommended:
+Before submitting pull requests, make sure to:
 
-```ini
-[auto_power_off]
-network_device: True  # Indicate this is a network device
-device_address: 192.168.1.123  # IP address of your smart plug
-network_test_attempts: 5  # Increase attempts for unreliable networks
-network_test_interval: 2.0  # Wait 2 seconds between connection attempts
-dry_run_mode: False  # Set to True initially for testing
-```
-
-This configuration enables connectivity testing before attempting to power off, improving reliability with network-based power devices.
-
-## Language Support
-
-This module is available in:
-- English (default)
-- French (see [README_FR.md](README_FR.md))
-
-### Adding New Languages
-
-The module now supports translations via external language files. To add a new language:
-
-1. Create a new JSON file in the `auto_power_off_langs` directory named after the language code (e.g., `de.json` for German)
-2. Copy the structure from an existing language file and translate all the messages
-3. Add the new language code to the validation list in the `_configure_language` method
-4. The new language will be available using `language: de` in configuration or via GCODE command
+1. Follow the type-safe coding style
+2. Maintain backward compatibility
+3. Update documentation for any new features
+4. Test changes with various configurations
 
 ## License
 
