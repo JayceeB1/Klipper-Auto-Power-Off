@@ -611,6 +611,8 @@ if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
         cp "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel_fr.cfg" "$REPO_DIR/ui/mainsail/" 2>/dev/null || true
         
         # Initialize git repository
+        git config user.email "$(whoami)@localhost"
+        git config user.name "$(whoami)"
         cd "$REPO_DIR"
         git init
         git config --global --add safe.directory "$REPO_DIR"
