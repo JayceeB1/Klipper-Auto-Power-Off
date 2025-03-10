@@ -18,6 +18,7 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 - **Nouveau** - Gestion d'erreurs améliorée et capacités de diagnostic
 - **Nouveau** - Support amélioré des périphériques réseau avec test de connexion robuste
 - **Nouveau** - Implémentation à typage sûr avec exceptions structurées
+- **Nouveau** - Correction des mises à jour automatiques via le gestionnaire de mise à jour Moonraker
 
 ## Prérequis
 
@@ -44,6 +45,7 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
 - Les entrées du menu LCD ont été supprimées pour se concentrer sur l'intégration de l'interface web
 - **Nouveau** - Code à typage sûr et structuré avec gestion d'erreurs améliorée
 - **Nouveau** - Meilleurs outils de diagnostic pour le dépannage
+- **Nouveau** - Intégration améliorée du système de mise à jour avec meilleure gestion des erreurs
 
 ## Installation
 
@@ -143,6 +145,20 @@ Lors de l'exécution du script d'installation, vous serez invité à ajouter la 
 2. Ajoute la configuration du gestionnaire de mise à jour à `moonraker.conf`
 3. Configure le dépôt pour suivre les mises à jour du projet principal
 
+### Résolution des problèmes de gestionnaire de mise à jour
+
+Si vous rencontrez des erreurs comme "Failed to detect repo url" ou "Invalid path" avec le gestionnaire de mise à jour, suivez ces étapes :
+
+1. Exécutez à nouveau le script d'installation :
+   ```bash
+   wget -O install.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
+   chmod +x install.sh
+   ./install.sh
+   ```
+
+2. Choisissez "o" lorsqu'on vous demande d'ajouter la configuration du gestionnaire de mise à jour
+3. Le script amélioré nettoiera les anciennes configurations et configurera correctement le dépôt git
+
 ### Configuration manuelle pour les installations existantes
 
 Si vous disposez d'une installation existante et souhaitez ajouter la prise en charge du gestionnaire de mise à jour :
@@ -155,6 +171,7 @@ Si vous disposez d'une installation existante et souhaitez ajouter la prise en c
    ```
 
 2. Choisissez "o" lorsqu'on vous demande d'ajouter la configuration du gestionnaire de mise à jour
+3. Vous pouvez spécifier un chemin personnalisé pour le dépôt local si nécessaire
 
 ### Configuration du gestionnaire de mise à jour
 
@@ -206,7 +223,18 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | `network_test_attempts` | 3 | Nombre de tentatives pour tester la connectivité du périphérique réseau |
 | `network_test_interval` | 1.0 | Intervalle en secondes entre les tentatives de test de connectivité réseau |
 
-## Nouvelles fonctionnalités dans la v2.0
+## Nouvelles fonctionnalités dans la v2.0.3
+
+### Fonctionnalité de mise à jour automatique améliorée
+
+La dernière version apporte des améliorations significatives au système de mise à jour :
+
+- Correction des problèmes avec l'intégration du gestionnaire de mise à jour
+- Meilleure gestion des erreurs pour la configuration du dépôt
+- Initialisation améliorée du dépôt Git
+- Suivi amélioré des fichiers pour éviter les erreurs "fichiers non suivis"
+- Possibilité de spécifier des chemins de dépôt personnalisés
+- Nettoyage automatique des configurations anciennes ou incorrectes
 
 ### Gestion d'erreurs améliorée
 
@@ -243,6 +271,14 @@ Le module propose désormais une gestion d'erreurs robuste avec une hiérarchie 
 ## Dépannage
 
 ### Problèmes courants et solutions
+
+#### Problèmes de gestionnaire de mise à jour
+
+Si vous voyez des erreurs comme "Failed to detect repo url" ou "Invalid path" dans votre gestionnaire de mise à jour :
+
+1. Téléchargez et exécutez le script d'installation amélioré
+2. Choisissez "o" lorsqu'on vous demande de mettre à jour la configuration Moonraker
+3. Le script configurera correctement le dépôt git et corrigera les problèmes de configuration
 
 #### Implémentation basée sur CURL
 

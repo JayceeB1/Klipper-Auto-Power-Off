@@ -19,6 +19,7 @@ A Klipper module that automatically powers off your 3D printer after a completed
 - **New** - Enhanced error handling and diagnostic capabilities
 - **New** - Improved network device support with robust connection testing
 - **New** - Type-safe implementation with structured exceptions
+- **New** - Fixed auto-update through Moonraker update manager
 
 ## Requirements
 
@@ -45,6 +46,7 @@ As of the latest version, Auto Power Off works primarily through Moonraker's pow
 - LCD menu entries have been removed to focus on web interface integration
 - **New** - Structured type-safe code with enhanced error handling
 - **New** - Better diagnostic tools for troubleshooting
+- **New** - Improved updater integration with better error handling
 
 ## Installation
 
@@ -144,6 +146,20 @@ When running the installation script, you'll be prompted to add the update manag
 2. Adds the update manager configuration to `moonraker.conf`
 3. Configures the repository to track updates from the main project
 
+### Troubleshooting Update Manager Issues
+
+If you encounter issues with the auto-update functionality showing errors like "Failed to detect repo url" or "Invalid path", follow these steps:
+
+1. Run the installation script again:
+   ```bash
+   wget -O install.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
+   chmod +x install.sh
+   ./install.sh
+   ```
+
+2. Choose "y" when asked about adding update manager configuration
+3. The improved script will clean up old configurations and properly set up the git repository
+
 ### Manual Setup for Existing Installations
 
 If you have an existing installation and want to add update manager support:
@@ -156,6 +172,7 @@ If you have an existing installation and want to add update manager support:
    ```
 
 2. Choose "y" when asked about adding update manager configuration
+3. You can specify a custom path for the local repository if needed
 
 ### Update Manager Configuration
 
@@ -207,7 +224,18 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `network_test_attempts` | 3 | Number of attempts to test network device connectivity |
 | `network_test_interval` | 1.0 | Interval in seconds between network connectivity test attempts |
 
-## New Features in v2.0
+## New Features in v2.0.3
+
+### Improved Auto-Update Functionality
+
+The latest version brings significant improvements to the update system:
+
+- Fixed issues with the update manager integration
+- Better error handling for repository setup
+- Improved Git repository initialization
+- Enhanced file tracking to prevent "untracked files" errors
+- Ability to specify custom repository paths
+- Automatic cleanup of old or incorrect configurations
 
 ### Enhanced Error Handling
 
@@ -244,6 +272,14 @@ The module now provides robust error handling with a structured exception hierar
 ## Troubleshooting
 
 ### Common Problems and Solutions
+
+#### Update Manager Issues
+
+If you see errors like "Failed to detect repo url" or "Invalid path" in your update manager:
+
+1. Download and run the improved installation script
+2. Choose "y" when asked to update Moonraker configuration
+3. The script will properly set up the git repository and fix configuration issues
 
 #### CURL-based implementation
 
