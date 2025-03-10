@@ -10,6 +10,10 @@ VERSION=$(grep -o "__version__ = \"[0-9.]*\"" "$MODULE_PATH" | cut -d'"' -f2)
 DEFAULT_LANG="en"
 LANG_CHOICE="$DEFAULT_LANG"
 
+if [ -z "$MODULE_PATH" ]; then
+    MODULE_PATH="${HOME}/klipper/klippy/extras/auto_power_off.py"
+fi
+
 # Colors for messages
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -551,10 +555,23 @@ EOL
     fi
 fi
 
+
+ADD_MOONRAKER=""
+
 # Setup for Moonraker update manager
-if [ "$UPDATE_MODE" = false ] && [ -t 0 ]; then
-    echo "$MSG_ADD_MOONRAKER"
-    read -r ADD_MOONRAKER
+if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
+    if [ "$UPDATE_MODE" = true ]; then
+        # Définir une valeur par défaut en mode mise à jour
+        ADD_MOONRAKER="y"
+    fi
+    
+    if [ -z "$ADD_MOONRAKER" ]; then
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            read -p "Voulez-vous mettre à jour la configuration Moonraker ? [o/N] " ADD_MOONRAKER
+        else
+            read -p "Do you want to update Moonraker configuration? [y/N] " ADD_MOONRAKER
+        fi
+    fi
     
     if [[ "$ADD_MOONRAKER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
         # Ask for moonraker.conf path
