@@ -27,9 +27,104 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Fonctions pour afficher les messages
+print_status() {
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        echo -e "${BLUE}[INFO]${NC} $1"
+    else
+        echo -e "${BLUE}[INFO]${NC} $1"
+    fi
+}
+
+print_success() {
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        echo -e "${GREEN}[OK]${NC} $1"
+    else
+        echo -e "${GREEN}[OK]${NC} $1"
+    fi
+}
+
+print_warning() {
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        echo -e "${YELLOW}[ATTENTION]${NC} $1"
+    else
+        echo -e "${YELLOW}[WARNING]${NC} $1"
+    fi
+}
+
+print_error() {
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        echo -e "${RED}[ERREUR]${NC} $1"
+    else
+        echo -e "${RED}[ERROR]${NC} $1"
+    fi
+}
+
 # Repository information
 REPO_URL="https://raw.githubusercontent.com/JayceeB1/Klipper-Auto-Power-Off/main"
 REPO_GIT="https://github.com/JayceeB1/Klipper-Auto-Power-Off.git"
+
+# Ajout de fonctions pour vérifier et réparer le dépôt Git
+
+# Fonction pour vérifier et réparer un dépôt Git existant
+repair_git_repo() {
+    local repo_dir="$1"
+    
+    if [ -d "$repo_dir/.git" ]; then
+        cd "$repo_dir" || return 1
+        
+        # Vérifier si le dépôt est en bon état
+        if ! git status &>/dev/null; then
+            print_warning "Dépôt Git corrompu, tentative de réparation..."
+            
+            # Créer une sauvegarde du dépôt
+            local backup_dir="${repo_dir}_backup_$(date +%Y%m%d%H%M%S)"
+            mkdir -p "$backup_dir"
+            cp -r "$repo_dir"/* "$backup_dir"/ 2>/dev/null
+            
+            # Réinitialiser complètement le dépôt
+            rm -rf "$repo_dir"
+            mkdir -p "$repo_dir"
+            git clone "${REPO_GIT}" "$repo_dir"
+            
+            # Restaurer les fichiers locaux modifiés
+            if [ -d "$backup_dir" ]; then
+                cp -n "$backup_dir"/*.py "$repo_dir"/ 2>/dev/null
+                cp -n "$backup_dir"/*.md "$repo_dir"/ 2>/dev/null
+                cp -n "$backup_dir"/*.cfg "$repo_dir"/ 2>/dev/null
+            fi
+            
+            print_status "Dépôt Git réparé et réinitialisé"
+            return 0
+        fi
+        
+        # Vérifier si l'URL distante est correcte (sensible à la casse)
+        local current_url=$(git config --get remote.origin.url)
+        if [ "$current_url" != "${REPO_GIT}" ]; then
+            print_warning "URL du dépôt incorrect : $current_url"
+            print_status "Correction de l'URL vers ${REPO_GIT}"
+            git remote set-url origin "${REPO_GIT}"
+        fi
+        
+        return 0
+    fi
+    
+    return 1
+}
+
+# Fonction pour vérifier la version installée
+verify_version() {
+    local module_path="$1"
+    if [ -f "$module_path" ]; then
+        local detected_version=$(grep -o "__version__ = \"[0-9.]*\"" "$module_path" | cut -d'"' -f2)
+        if [ -n "$detected_version" ]; then
+            print_status "Version détectée: $detected_version"
+            VERSION="$detected_version"
+        else
+            print_warning "Version non détectée dans $module_path, utilisation de la version par défaut"
+        fi
+    fi
+}
 
 # Fonction pour redémarrer Moonraker
 restart_moonraker() {
@@ -106,6 +201,13 @@ detect_paths() {
     for p in ~/auto_power_off /home/*/auto_power_off; do
         if [ -d "$p" ]; then
             DEFAULT_REPO_PATH="$p"
+
+            if [ -d "$DEFAULT_REPO_PATH" ]; then
+                print_status "Vérification de l'état du dépôt Git..."
+                repair_git_repo "$DEFAULT_REPO_PATH"
+                verify_version "$MODULE_PATH"
+            fi
+
             break
         fi
     done
