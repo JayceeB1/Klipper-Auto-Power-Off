@@ -51,22 +51,22 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
 
 1. Téléchargez le script d'installation :
    ```bash
-   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install_auto_power_off.sh
+   wget -O install.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
    ```
 
 2. Rendez-le exécutable :
    ```bash
-   chmod +x install_auto_power_off.sh
+   chmod +x install.sh
    ```
 
 3. Exécutez le script :
    ```bash
    # Exécuter avec la langue par défaut (Anglais)
-   ./install_auto_power_off.sh
+   ./install.sh
 
    # Ou spécifier une langue
-   ./install_auto_power_off.sh --fr  # Français
-   ./install_auto_power_off.sh --en  # Anglais
+   ./install.sh --fr  # Français
+   ./install.sh --en  # Anglais
    ```
 
 4. Suivez les instructions à l'écran.

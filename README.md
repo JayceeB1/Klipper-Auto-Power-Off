@@ -52,7 +52,7 @@ As of the latest version, Auto Power Off works primarily through Moonraker's pow
 
 1. Download the installation script:
    ```bash
-   wget -O install_auto_power_off.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
+   wget -O install.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
    ```
 
 2. Make it executable:
