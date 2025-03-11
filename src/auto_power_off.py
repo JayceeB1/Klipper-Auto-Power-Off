@@ -12,7 +12,7 @@ import socket
 from enum import Enum, auto
 from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Set, TypeVar, Generic, Type, cast
 
-__version__ = "2.0.5"  # Module version for update checking
+__version__ = "2.0.8"  # Module version for update checking
 
 # Définition des énumérations pour les états et méthodes
 class PowerOffMethod(Enum):
@@ -619,6 +619,9 @@ class AutoPowerOff:
         """
         self.logger.info(self.get_text("module_initialized"))
         
+        # S'assurer que l'état d'extinction est réinitialisé
+        self._reset_shutdown_state()
+        
         try:
             if self._verify_power_device():
                 self.logger.info(self.get_text("power_device_ready", device=self.power_device))
@@ -629,6 +632,9 @@ class AutoPowerOff:
         
         # Set up periodic temperature checker
         self.reactor.register_timer(self._update_temps, self.reactor.monotonic() + 1)
+        
+        # Set up periodic device state checker
+        self.reactor.register_timer(self._verify_device_state, self.reactor.monotonic() + 10)
 
     def _handle_print_complete(self) -> None:
         """
@@ -879,6 +885,7 @@ class AutoPowerOff:
                 return
             
             self._shutdown_in_progress = True
+            self._shutdown_start_time = self.reactor.monotonic()  # Enregistrer le moment du début de l'extinction
             self._diagnostic_log("Preparing MCU for shutdown / Préparation du MCU pour l'extinction", level="info")
             
             try:
@@ -963,6 +970,17 @@ class AutoPowerOff:
             error_msg = f"{error_msg}: {str(last_error)}"
         
         raise MoonrakerApiError(error_msg)
+    
+    def _reset_shutdown_state(self):
+        """
+        Réinitialise l'état d'extinction du module.
+        
+        Cette méthode est utilisée pour s'assurer que le module est dans un état
+        cohérent après un redémarrage ou lorsque l'état du relais change.
+        """
+        self._shutdown_in_progress = False
+        self._diagnostic_log("État d'extinction réinitialisé / Shutdown state reset", level="info")
+
 
     def _power_off(self, force_direct: bool = False, diagnostic_mode: Optional[bool] = None) -> None:
         """
@@ -981,11 +999,9 @@ class AutoPowerOff:
             NetworkDeviceUnreachableError: If the network device is unreachable
             MoonrakerApiError: If there's an error with the Moonraker API
         """
+        self._reset_shutdown_state()
+    
         try:
-            if self._shutdown_in_progress:
-                self.logger.info("Shutdown already in progress / Extinction déjà en cours, commande ignorée")
-                return
-            
             if self.printer.is_shutdown():
                 self.logger.warning("Printer already shutdown / Imprimante déjà éteinte, abandon de la procédure")
                 return
@@ -1001,12 +1017,14 @@ class AutoPowerOff:
                 power_off_url = f"{base_url}/machine/device_power/device?device={self.power_device}&action=off"
                 self._diagnostic_log(f"Moonraker URLs: status={power_status_url}, power_off={power_off_url}", level="info")
             
-            self._shutdown_in_progress = False
+            # Indique qu'une extinction est en cours
+            self._shutdown_in_progress = True
             
             if self.device_state != DeviceState.AVAILABLE:
                 error_msg = f"Power device '{self.power_device}' not available for power off"
                 self.logger.error(self.get_text("power_device_not_available_for_poweroff", device=self.power_device))
                 self._notify_user("power_device_not_available_for_poweroff", device=self.power_device)
+                self._reset_shutdown_state()  # Réinitialisation en cas d'erreur
                 raise PowerDeviceNotAvailableError(error_msg)
             
             # Override diagnostic mode if specified
@@ -1019,15 +1037,21 @@ class AutoPowerOff:
                 except NetworkDeviceUnreachableError as e:
                     self.logger.error(self.get_text("network_device_unreachable", device=self.device_address, attempts=self.network_test_attempts))
                     self._notify_user("network_device_unreachable_poweroff", device=self.device_address)
+                    self._reset_shutdown_state()  # Réinitialisation en cas d'erreur
                     raise
             
             # If dry run mode is enabled, simulate power off
             if self.dry_run_mode:
+                self._reset_shutdown_state()  # Réinitialisation après simulation
                 return self._power_off_dry_run()
             
             # Prepare the MCU for shutdown
-            self._prepare_mcu_for_shutdown()
-            time.sleep(1)
+            try:
+                self._prepare_mcu_for_shutdown()
+                time.sleep(1)
+            except Exception as e:
+                self._reset_shutdown_state()  # Réinitialisation en cas d'erreur
+                raise
             
             # Use Moonraker API if enabled and not forced to use direct method
             if self.moonraker_integration and not force_direct:
@@ -1045,6 +1069,7 @@ class AutoPowerOff:
                     self.logger.info(self.get_text("powered_off_moonraker"))
                     self._notify_user("power_off_success")
                     self.state = "off"
+                    # Ne pas réinitialiser _shutdown_in_progress ici, car l'appareil va s'éteindre
                     return
                 
                 except MoonrakerApiError as e:
@@ -1059,23 +1084,63 @@ class AutoPowerOff:
                     except PowerOffError as direct_error:
                         self.logger.error(f"Direct method also failed: {str(direct_error)}")
                         self.state = "error"
+                        self._reset_shutdown_state()  # Réinitialisation en cas d'échec
                         raise
             
             else:
                 method = "direct (forced)" if force_direct else "direct"
                 self._diagnostic_log(f"Using {method} Klipper method for power off / Utilisation de la méthode {method} pour extinction", level="info")
                 self._power_off_direct()
-        
+            
         except (PowerOffError, NetworkDeviceError, MoonrakerApiError) as e:
+            self._reset_shutdown_state()  # Réinitialisation en cas d'erreur spécifique
             raise
         
         except Exception as e:
             error_msg = f"Unhandled exception during power off: {str(e)}"
             self.logger.error(error_msg)
             self._diagnostic_log(error_msg, level="error", data=e)
-            self._shutdown_in_progress = False
+            self._reset_shutdown_state()  # Réinitialisation en cas d'erreur générique
             raise PowerOffError(error_msg) from e
-
+        
+    def _verify_device_state(self, eventtime: float) -> float:
+        """
+        Vérifie périodiquement l'état du périphérique d'alimentation et réinitialise
+        l'état interne du module si nécessaire.
+        
+        Args:
+            eventtime: Temps actuel fourni par Klipper
+            
+        Returns:
+            float: Temps pour la prochaine vérification
+        """
+        try:
+            # Vérifier si un redémarrage est nécessaire
+            if self._shutdown_in_progress:
+                # Si l'extinction est en cours depuis plus de 30 secondes, 
+                # considérer qu'il y a eu un problème et réinitialiser
+                if hasattr(self, "_shutdown_start_time") and (self.reactor.monotonic() - self._shutdown_start_time) > 30:
+                    self._diagnostic_log("Réinitialisation forcée de l'état d'extinction après timeout / Forced reset of shutdown state after timeout", level="warning")
+                    self._reset_shutdown_state()
+            
+            # Vérifier si le périphérique est disponible
+            try:
+                if not self._verify_power_device():
+                    self._diagnostic_log("Périphérique d'alimentation non disponible lors de la vérification / Power device not available during check", level="warning")
+                else:
+                    # Si le périphérique est disponible et que l'extinction était en cours,
+                    # cela signifie qu'il a été rallumé manuellement
+                    if self._shutdown_in_progress:
+                        self._diagnostic_log("Périphérique rallumé manuellement, réinitialisation de l'état / Device manually turned on, resetting state", level="info")
+                        self._reset_shutdown_state()
+            except Exception as e:
+                self._diagnostic_log(f"Erreur lors de la vérification du périphérique: {str(e)} / Error checking device: {str(e)}", level="warning")
+        except Exception as e:
+            self.logger.error(f"Erreur non gérée dans _verify_device_state: {str(e)} / Unhandled error in _verify_device_state: {str(e)}")
+        
+        # Vérifier toutes les 10 secondes
+        return eventtime + 10.0
+        
     def _diagnostic_log(self, message: str, level: str = "debug", data: Any = None) -> None:
         """
         Log diagnostic information if diagnostic mode is enabled.
@@ -1439,6 +1504,12 @@ class AutoPowerOff:
                 temp_threshold=self.temp_threshold,
                 idle_timeout=int(self.idle_timeout / 60)
             ))
+
+        elif option == 'reset':
+            # Réinitialisation forcée de l'état du module
+            self._reset_shutdown_state()
+            self._verify_power_device()
+            gcmd.respond_info("Réinitialisation de l'état du module effectuée / Module state reset completed")
         
         elif option == 'diagnostic':
             diag_mode = gcmd.get_int('VALUE', 1, minval=0, maxval=1)

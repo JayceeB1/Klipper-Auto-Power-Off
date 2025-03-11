@@ -16,10 +16,6 @@ A Klipper module that automatically powers off your 3D printer after a completed
 - Available in English and French
 - Compatible with all Moonraker power device types (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
 - Web interface focused: LCD menus have been removed for simplicity
-- **New** - Enhanced error handling and diagnostic capabilities
-- **New** - Improved network device support with robust connection testing
-- **New** - Type-safe implementation with structured exceptions
-- **New** - Fixed auto-update through Moonraker update manager
 
 ## Requirements
 
@@ -35,18 +31,34 @@ If you find this module useful, consider buying me a coffee to support further d
 
 Your support is greatly appreciated and helps keep this project maintained and improved!
 
-## Important Update
+## Available Commands
 
-As of the latest version, Auto Power Off works primarily through Moonraker's power control API. The module is now configured by default to use Moonraker integration, providing better compatibility with various power device types.
+The module provides the following GCODE commands:
 
-### Key Changes
-- Moonraker integration is now enabled by default
-- Configuration requires your device to be properly set up in Moonraker's config
-- Improved reliability and compatibility with network-based power devices
-- LCD menu entries have been removed to focus on web interface integration
-- **New** - Structured type-safe code with enhanced error handling
-- **New** - Better diagnostic tools for troubleshooting
-- **New** - Improved updater integration with better error handling
+- `AUTO_POWEROFF ON` - Globally enable the function
+- `AUTO_POWEROFF OFF` - Globally disable the function
+- `AUTO_POWEROFF START` - Manually start the timer
+- `AUTO_POWEROFF CANCEL` - Cancel the current timer
+- `AUTO_POWEROFF NOW` - Immediately power off the printer
+- `AUTO_POWEROFF STATUS` - Display detailed status
+- `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Enable diagnostic mode (0 to disable)
+- `AUTO_POWEROFF RESET` - Force reset of the module's internal state
+- `AUTO_POWEROFF DRYRUN VALUE=1` - Enable dry run mode (0 to disable)
+
+## Key Features
+
+The module offers several advanced features:
+
+- **Intelligent Power Management**: Powers off only when temperatures are safe and printer is idle
+- **Multi-UI Integration**: Full integration with both Fluidd and Mainsail interfaces
+- **Network Device Support**: Works with various network-connected power devices
+- **Diagnostics & Troubleshooting**: Diagnostic mode for detailed logs and operation tracing
+- **Moonraker Integration**: Leverages Moonraker's power control API for better compatibility
+- **Type-Safe Implementation**: Robust error handling with structured exception hierarchy
+- **Multilingual Support**: Full English and French language support
+- **Seamless Updates**: Integrates with Moonraker's update manager for easy updates
+
+For a detailed list of changes between versions, please refer to the [CHANGELOG.md](CHANGELOG.md) file.
 
 ## Installation
 
@@ -175,16 +187,18 @@ If you have an existing installation and want to add update manager support:
 
 ### Update Manager Configuration
 
-The following configuration will be added to your `moonraker.conf`:
+The following configuration (or similar) will be added to your `moonraker.conf`:
 
 ```ini
 [update_manager auto_power_off]
 type: git_repo
-path: ~/auto_power_off
+path: ~/auto_power_off    # This path may vary according to your installation
 origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
 primary_branch: main
 install_script: scripts/install.sh
 ```
+
+Note: The installation script will detect or prompt you for the appropriate path for your system. The path may vary based on your user account and preferences (e.g., `/home/username/auto_power_off`). The script will ensure the correct path is used in your configuration.
 
 ### Updating via Fluidd/Mainsail
 
@@ -221,51 +235,6 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `device_address` | None | IP address or hostname of the network device |
 | `network_test_attempts` | 3 | Number of attempts to test network device connectivity |
 | `network_test_interval` | 1.0 | Interval in seconds between network connectivity test attempts |
-
-## New Features in v2.0.3
-
-### Improved Auto-Update Functionality
-
-The latest version brings significant improvements to the update system:
-
-- Fixed issues with the update manager integration
-- Better error handling for repository setup
-- Improved Git repository initialization
-- Enhanced file tracking to prevent "untracked files" errors
-- Ability to specify custom repository paths
-- Automatic cleanup of old or incorrect configurations
-
-### Enhanced Error Handling
-
-The module now provides robust error handling with a structured exception hierarchy:
-
-- Better error reporting for network connectivity issues
-- Clear distinction between different types of errors (device, Moonraker API, network)
-- Improved diagnostic logging for troubleshooting
-
-### Type-Safe Implementation
-
-- Full type annotations for better code maintainability
-- Enumerations for states and methods for improved reliability
-- Clean API for integrating with Klipper's ecosystem
-
-### Advanced Network Device Support
-
-- Comprehensive network device testing before power off attempts
-- Configurable retry mechanism for unreliable network environments
-- Improved fallback to direct methods when network devices are unreachable
-
-### Improved Diagnostics
-
-- Enhanced diagnostic mode with detailed logging
-- Better reporting of device capabilities
-- Clear status information through the user interface
-
-### Multilingual Support Improvements
-
-- More robust language detection and persistence
-- Better handling of translation loading
-- Clearer error messages in both English and French
 
 ## Uninstallation
 
@@ -343,6 +312,19 @@ If you prefer to uninstall manually, follow these steps:
 ## Troubleshooting
 
 ### Common Problems and Solutions
+
+#### Module State Reset
+
+If your power device has been manually turned back on after an automatic power off and you encounter issues with subsequent power off commands, you can use the `AUTO_POWEROFF RESET` command to force a reset of the module's internal state:
+
+```gcode
+AUTO_POWEROFF RESET
+```
+
+This is particularly useful when:
+- The module fails to detect that the printer has been manually powered back on
+- Commands like `AUTO_POWEROFF NOW` no longer work after a manual power-on
+- The system is in an inconsistent state after a network or communication interruption
 
 #### Update Manager Issues
 

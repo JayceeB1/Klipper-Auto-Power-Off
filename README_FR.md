@@ -13,12 +13,9 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 - Surveillance de l'état des températures de la buse et du lit
 - Contrôle manuel avec des commandes GCODE
 - Fonctionne avec n'importe quel périphérique d'alimentation contrôlé par GPIO
+- Disponible en anglais et français
 - Compatible avec tous les types de dispositifs d'alimentation Moonraker (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
 - Focalisé sur l'interface web : les menus LCD ont été supprimés pour plus de simplicité
-- **Nouveau** - Gestion d'erreurs améliorée et capacités de diagnostic
-- **Nouveau** - Support amélioré des périphériques réseau avec test de connexion robuste
-- **Nouveau** - Implémentation à typage sûr avec exceptions structurées
-- **Nouveau** - Correction des mises à jour automatiques via le gestionnaire de mise à jour Moonraker
 
 ## Prérequis
 
@@ -34,18 +31,34 @@ Si vous trouvez ce module utile, vous pouvez m'offrir un café pour soutenir son
 
 Votre soutien est grandement apprécié et aide à maintenir et améliorer ce projet !
 
-## Mise à jour importante
+## Commandes disponibles
 
-À partir de la dernière version, Auto Power Off fonctionne principalement via l'API de contrôle d'alimentation de Moonraker. Le module est maintenant configuré par défaut pour utiliser l'intégration Moonraker, offrant une meilleure compatibilité avec différents types de périphériques d'alimentation.
+Le module fournit les commandes GCODE suivantes :
 
-### Changements clés
-- L'intégration Moonraker est maintenant activée par défaut
-- La configuration nécessite que votre périphérique soit correctement configuré dans la configuration de Moonraker
-- Fiabilité et compatibilité améliorées avec les périphériques d'alimentation réseau
-- Les entrées du menu LCD ont été supprimées pour se concentrer sur l'intégration de l'interface web
-- **Nouveau** - Code à typage sûr et structuré avec gestion d'erreurs améliorée
-- **Nouveau** - Meilleurs outils de diagnostic pour le dépannage
-- **Nouveau** - Intégration améliorée du système de mise à jour avec meilleure gestion des erreurs
+- `AUTO_POWEROFF ON` - Active globalement la fonction
+- `AUTO_POWEROFF OFF` - Désactive globalement la fonction
+- `AUTO_POWEROFF START` - Démarre manuellement le minuteur
+- `AUTO_POWEROFF CANCEL` - Annule le minuteur en cours
+- `AUTO_POWEROFF NOW` - Éteint immédiatement l'imprimante
+- `AUTO_POWEROFF STATUS` - Affiche l'état détaillé
+- `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Active le mode diagnostic (0 pour désactiver)
+- `AUTO_POWEROFF RESET` - Force la réinitialisation de l'état interne du module
+- `AUTO_POWEROFF DRYRUN VALUE=1` - Active le mode simulation (0 pour désactiver)
+
+## Caractéristiques principales
+
+Le module offre plusieurs fonctionnalités avancées :
+
+- **Gestion intelligente de l'alimentation** : Éteint uniquement lorsque les températures sont sécuritaires et que l'imprimante est inactive
+- **Intégration multi-interface** : Intégration complète avec les interfaces Fluidd et Mainsail
+- **Support des périphériques réseau** : Fonctionne avec divers périphériques d'alimentation connectés au réseau
+- **Diagnostics et dépannage** : Mode diagnostic pour des journaux détaillés et le traçage des opérations
+- **Intégration Moonraker** : Exploite l'API de contrôle d'alimentation de Moonraker pour une meilleure compatibilité
+- **Implémentation à typage sûr** : Gestion robuste des erreurs avec une hiérarchie d'exceptions structurée
+- **Support multilingue** : Support complet des langues anglaise et française
+- **Mises à jour transparentes** : S'intègre au gestionnaire de mise à jour de Moonraker pour des mises à jour faciles
+
+Pour une liste détaillée des changements entre les versions, veuillez consulter le fichier [CHANGELOG.md](CHANGELOG.md).
 
 ## Installation
 
@@ -174,16 +187,18 @@ Si vous disposez d'une installation existante et souhaitez ajouter la prise en c
 
 ### Configuration du gestionnaire de mise à jour
 
-La configuration suivante sera ajoutée à votre `moonraker.conf` :
+La configuration suivante (ou similaire) sera ajoutée à votre `moonraker.conf` :
 
 ```ini
 [update_manager auto_power_off]
 type: git_repo
-path: ~/auto_power_off
+path: ~/auto_power_off    # Ce chemin peut varier selon votre installation
 origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
 primary_branch: main
 install_script: scripts/install.sh
 ```
+
+Note : Le script d'installation détectera ou vous demandera le chemin approprié pour votre système. Le chemin peut varier en fonction de votre compte utilisateur et de vos préférences (par exemple, `/home/utilisateur/auto_power_off`). Le script s'assurera que le chemin correct est utilisé dans votre configuration.
 
 ### Mise à jour via Fluidd/Mainsail
 
@@ -221,51 +236,6 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | `network_test_attempts` | 3 | Nombre de tentatives pour tester la connectivité du périphérique réseau |
 | `network_test_interval` | 1.0 | Intervalle en secondes entre les tentatives de test de connectivité réseau |
 
-## Nouvelles fonctionnalités dans la v2.0.3
-
-### Fonctionnalité de mise à jour automatique améliorée
-
-La dernière version apporte des améliorations significatives au système de mise à jour :
-
-- Correction des problèmes avec l'intégration du gestionnaire de mise à jour
-- Meilleure gestion des erreurs pour la configuration du dépôt
-- Initialisation améliorée du dépôt Git
-- Suivi amélioré des fichiers pour éviter les erreurs "fichiers non suivis"
-- Possibilité de spécifier des chemins de dépôt personnalisés
-- Nettoyage automatique des configurations anciennes ou incorrectes
-
-### Gestion d'erreurs améliorée
-
-Le module propose désormais une gestion d'erreurs robuste avec une hiérarchie d'exceptions structurée :
-
-- Meilleure communication des erreurs pour les problèmes de connectivité réseau
-- Distinction claire entre les différents types d'erreurs (périphérique, API Moonraker, réseau)
-- Journalisation améliorée des diagnostics pour le dépannage
-
-### Implémentation à typage sûr
-
-- Annotations de type complètes pour une meilleure maintenabilité du code
-- Énumérations pour les états et méthodes pour une meilleure fiabilité
-- API propre pour l'intégration avec l'écosystème Klipper
-
-### Support avancé des périphériques réseau
-
-- Tests complets des périphériques réseau avant les tentatives d'extinction
-- Mécanisme de nouvelle tentative configurable pour les environnements réseau peu fiables
-- Amélioration du fallback vers des méthodes directes lorsque les périphériques réseau sont injoignables
-
-### Diagnostics améliorés
-
-- Mode de diagnostic amélioré avec journalisation détaillée
-- Meilleure communication des capacités des périphériques
-- Informations d'état claires à travers l'interface utilisateur
-
-### Améliorations du support multilingue
-
-- Détection et persistance de la langue plus robustes
-- Meilleure gestion du chargement des traductions
-- Messages d'erreur plus clairs en français et en anglais
-
 ## Désinstallation
 
 Pour désinstaller complètement le module Auto Power Off, un script de désinstallation est maintenant disponible :
@@ -300,6 +270,7 @@ Le script effectuera automatiquement les actions suivantes :
 - Nettoyage des modifications dans printer.cfg
 - Suppression de la configuration du gestionnaire de mise à jour dans moonraker.conf
 - Suppression du dépôt Git local créé pour les mises à jour
+- Création de sauvegardes de tous les fichiers de configuration modifiés
 
 ### Options avancées
 
@@ -341,6 +312,19 @@ Si vous préférez désinstaller manuellement, voici les étapes à suivre :
 ## Dépannage
 
 ### Problèmes courants et solutions
+
+#### Réinitialisation de l'état du module
+
+Si votre périphérique d'alimentation a été rallumé manuellement après une extinction automatique et que vous rencontrez des problèmes avec les commandes d'extinction suivantes, vous pouvez utiliser la commande `AUTO_POWEROFF RESET` pour forcer une réinitialisation de l'état interne du module :
+
+```gcode
+AUTO_POWEROFF RESET
+```
+
+Ceci est particulièrement utile lorsque :
+- Le module ne détecte pas que l'imprimante a été rallumée manuellement
+- Les commandes comme `AUTO_POWEROFF NOW` ne fonctionnent plus après un rallumage manuel
+- Le système est dans un état incohérent après une interruption réseau ou de communication
 
 #### Problèmes de gestionnaire de mise à jour
 

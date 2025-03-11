@@ -5,6 +5,20 @@ All notable changes to the Klipper Auto Power Off project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.8] - 2025-03-11
+
+### Added
+* New command `AUTO_POWEROFF RESET` to force reset module's internal state
+* Periodic device state verification to detect manual power-on
+* Timeout mechanism to avoid stuck shutdown state
+* Shutdown start timestamp tracking
+
+### Fixed
+* Issue preventing power off after manual power-on of the device
+* Improved error handling with state reset at each potential failure point
+* Stuck shutdown state detection and automatic recovery
+* Better handling of device state changes
+
 ## [2.0.7] - 2025-03-11
 
 ### Fixed
