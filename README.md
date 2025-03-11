@@ -126,7 +126,6 @@ As of the latest version, Auto Power Off works primarily through Moonraker's pow
    origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
    primary_branch: main
    install_script: scripts/install.sh
-   managed_services: klipper
    ```
 
 5. Restart Klipper:
@@ -185,7 +184,6 @@ path: ~/auto_power_off
 origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
 primary_branch: main
 install_script: scripts/install.sh
-managed_services: klipper
 ```
 
 ### Updating via Fluidd/Mainsail

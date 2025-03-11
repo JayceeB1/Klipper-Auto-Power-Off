@@ -318,14 +318,13 @@ add_update_manager_config() {
     # Ajout de la configuration avec gestion multilingue et URL correcte (sensible à la casse)
     cat >> "$moonraker_conf" << EOL
 
-# Configuration de mise à jour pour Auto Power Off / Update manager configuration for Auto Power Off
 [update_manager auto_power_off]
 type: git_repo
 path: ${repo_path}
 origin: ${REPO_GIT}
 primary_branch: main
 install_script: scripts/install.sh
-managed_services: klipper
+
 EOL
     
     if [ "$LANG_CHOICE" = "fr" ]; then

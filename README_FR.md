@@ -125,7 +125,6 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
    origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
    primary_branch: main
    install_script: scripts/install.sh
-   managed_services: klipper
    ```
 
 5. Redémarrez Klipper :
@@ -184,7 +183,6 @@ path: ~/auto_power_off
 origin: https://github.com/JayceeB1/Klipper-Auto-Power-Off.git
 primary_branch: main
 install_script: scripts/install.sh
-managed_services: klipper
 ```
 
 ### Mise à jour via Fluidd/Mainsail
