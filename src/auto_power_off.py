@@ -971,14 +971,16 @@ class AutoPowerOff:
         
         raise MoonrakerApiError(error_msg)
     
-    def _reset_shutdown_state(self):
+    def _reset_shutdown_state(self) -> None:
         """
         Réinitialise l'état d'extinction du module.
         
         Cette méthode est utilisée pour s'assurer que le module est dans un état
-        cohérent après un redémarrage ou lorsque l'état du relais change.
+        cohérent après un redémarrage ou un changement d'état du périphérique.
         """
         self._shutdown_in_progress = False
+        if hasattr(self, '_shutdown_start_time'):
+            delattr(self, '_shutdown_start_time')
         self._diagnostic_log("État d'extinction réinitialisé / Shutdown state reset", level="info")
 
 
