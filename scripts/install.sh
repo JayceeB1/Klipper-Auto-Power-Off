@@ -277,7 +277,32 @@ print_error() {
 add_update_manager_config() {
     local moonraker_conf="$1"
     local repo_path="$2"
-    
+
+    # Vérification du fichier moonraker.asvc
+    if [ -z "$moonraker_asvc" ]; then
+        moonraker_asvc="${PRINTER_CONFIG_DIR%/}/moonraker.asvc"
+    fi
+
+    if [ ! -f "$moonraker_asvc" ]; then
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            print_warning "Fichier moonraker.asvc non trouvé à $moonraker_asvc"
+            print_warning "Le service auto_power_off ne sera pas ajouté automatiquement"
+        else
+            print_warning "moonraker.asvc file not found at $moonraker_asvc"
+            print_warning "auto_power_off service will not be automatically added"
+        fi
+    else
+        # Ajouter auto_power_off s'il n'est pas déjà présent
+        if ! grep -q "auto_power_off" "$moonraker_asvc"; then
+            echo "auto_power_off" >> "$moonraker_asvc"
+            if [ "$LANG_CHOICE" = "fr" ]; then
+                print_success "Service auto_power_off ajouté à moonraker.asvc"
+            else
+                print_success "auto_power_off service added to moonraker.asvc"
+            fi
+        fi
+    fi
+
     # Vérification du fichier de configuration
     if [ ! -f "$moonraker_conf" ]; then
         if [ "$LANG_CHOICE" = "fr" ]; then
