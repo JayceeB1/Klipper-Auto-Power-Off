@@ -267,6 +267,79 @@ The module now provides robust error handling with a structured exception hierar
 - Better handling of translation loading
 - Clearer error messages in both English and French
 
+## Uninstallation
+
+To completely uninstall the Auto Power Off module, an uninstallation script is now available:
+
+### Automatic Uninstallation
+
+1. Download the uninstallation script:
+   ```bash
+   wget -O uninstall.sh https://raw.githubusercontent.com/JayceeB1/Klipper-Auto-Power-Off/main/scripts/uninstall.sh
+   ```
+
+2. Make it executable:
+   ```bash
+   chmod +x uninstall.sh
+   ```
+
+3. Run the script:
+   ```bash
+   # Run with default language (English)
+   ./uninstall.sh
+
+   # Or specify a language
+   ./uninstall.sh --en  # English
+   ./uninstall.sh --fr  # French
+   ```
+
+4. Follow the on-screen instructions.
+
+The script will automatically perform the following actions:
+- Remove the Python module and translation files
+- Remove the UI configuration files for Fluidd and Mainsail
+- Clean up modifications in printer.cfg
+- Remove the update manager configuration in moonraker.conf
+- Remove the local Git repository created for updates
+- Create backups of all modified configuration files
+
+### Advanced Options
+
+- `--force`: Run the uninstallation without asking for confirmation
+- `--fr` or `--en`: Specify the language for messages (French or English)
+
+### Manual Uninstallation
+
+If you prefer to uninstall manually, follow these steps:
+
+1. Remove the Python module:
+   ```bash
+   rm ~/klipper/klippy/extras/auto_power_off.py
+   rm -r ~/klipper/klippy/extras/auto_power_off_langs
+   ```
+
+2. Remove the configuration files:
+   ```bash
+   # For Fluidd
+   rm ~/printer_data/config/fluidd/auto_power_off*.cfg
+   
+   # For Mainsail
+   rm ~/printer_data/config/mainsail/auto_power_off*.cfg
+   rm ~/printer_data/config/mainsail/auto_power_off_panel*.cfg
+   ```
+
+3. Edit your `printer.cfg` file to remove the sections related to Auto Power Off.
+
+4. Edit your `moonraker.conf` file to remove the `[update_manager auto_power_off]` section.
+
+5. Remove the local Git repository (usually `~/auto_power_off`).
+
+6. Restart Klipper and Moonraker:
+   ```bash
+   sudo systemctl restart klipper
+   sudo systemctl restart moonraker
+   ```
+
 ## Troubleshooting
 
 ### Common Problems and Solutions
