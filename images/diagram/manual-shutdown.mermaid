@@ -1,0 +1,63 @@
+sequenceDiagram
+    participant U as User
+    participant K as Klipper (GCODE)
+    participant APO as Auto Power Off
+    participant M as Moonraker API
+    participant P as Power Device
+
+    U->>K: AUTO_POWEROFF NOW
+    K->>APO: cmd_AUTO_POWEROFF(option="now")
+    APO->>K: Notify "powering off"
+    
+    Note over APO: Executed via reactor callback
+    APO->>APO: _power_off()
+
+    opt Verify device availability
+        APO->>APO: _verify_power_device()
+        alt Device not available
+            APO->>APO: Raise PowerDeviceNotAvailableError
+        end
+    end
+    
+    opt Dry run mode
+        APO->>APO: _power_off_dry_run()
+        APO->>K: Notify "simulating power off"
+        Note over APO: No actual power off
+    end
+    
+    opt Network device test
+        APO->>P: Test connectivity
+        alt Device unreachable
+            APO->>APO: Raise NetworkDeviceUnreachableError
+        end
+    end
+    
+    APO->>APO: _prepare_mcu_for_shutdown()
+    APO->>K: TURN_OFF_HEATERS
+    
+    alt Moonraker integration & not forced direct
+        APO->>M: POST /machine/device_power/device (action=off)
+        alt Moonraker API success
+            M->>P: Power off device
+            APO->>APO: Log "powered off via Moonraker"
+        else Failure after retries
+            APO->>APO: Log "falling back to direct method"
+            APO->>APO: _power_off_direct()
+        end
+    else Direct method
+        APO->>APO: _power_off_direct()
+        
+        alt set_power available
+            APO->>P: set_power(0)
+        else turn_off available
+            APO->>P: turn_off()
+        else power_off available
+            APO->>P: power_off()
+        else GCODE available
+            APO->>K: POWER_OFF
+        else
+            APO->>APO: Raise PowerOffError
+        end
+    end
+    
+    Note over APO,P: Printer powered off

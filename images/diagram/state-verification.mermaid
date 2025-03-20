@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant K as Klipper
+    participant APO as Auto Power Off
+    participant M as Moonraker
+    participant P as Power Device
+
+    Note over K,APO: Module startup
+    K->>APO: _handle_ready()
+    APO->>K: reactor.register_timer(_verify_device_state, +10s)
+    
+    loop Every 10 seconds
+        K-->>APO: _verify_device_state(eventtime)
+        
+        alt Shutdown in progress
+            APO->>APO: Check if timeout exceeded
+            alt Timeout exceeded (>30s)
+                APO->>APO: _reset_shutdown_state()
+                APO->>APO: Log "Forced reset after timeout"
+            end
+        end
+        
+        APO->>APO: _verify_power_device()
+        
+        alt Device available and shutdown in progress
+            APO->>APO: Detect manual power-on
+            APO->>APO: _reset_shutdown_state()
+            APO->>APO: Log "Device manually turned on"
+        end
+        
+        APO->>K: Return eventtime + 10.0
+    end
+    
+    Note over K,P: This periodic check allows:
+    Note over K,P: 1. Detection of manual power-ons
+    Note over K,P: 2. Recovery from stuck shutdown states
+    Note over K,P: 3. Maintaining internal state consistency

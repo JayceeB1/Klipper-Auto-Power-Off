@@ -7,6 +7,72 @@
 DEFAULT_LANG="en"
 LANG_CHOICE="$DEFAULT_LANG"
 
+# Function to validate installation mode
+validate_installation_mode() {
+    # Explicitly reset UPDATE_MODE
+    if [ -z "$UPDATE_MODE" ]; then
+        UPDATE_MODE=false
+    fi
+
+    # Multilingual messages
+    local msg_checking_install_mode
+    local msg_module_detected
+    local msg_lang_dir_detected
+    local msg_config_detected
+    local msg_final_mode
+
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        msg_checking_install_mode="Validation du mode d'installation"
+        msg_module_detected="Module précédemment installé détecté"
+        msg_lang_dir_detected="Répertoire de langues précédemment installé détecté"
+        msg_config_detected="Fichiers de configuration précédents détectés"
+        msg_final_mode="Mode d'installation final :"
+    else
+        msg_checking_install_mode="Validating installation mode"
+        msg_module_detected="Previously installed module detected"
+        msg_lang_dir_detected="Previous language directory detected"
+        msg_config_detected="Previous configuration files detected"
+        msg_final_mode="Final installation mode:"
+    fi
+
+    # Paths to check
+    local module_path="${KLIPPER_PATH}/klippy/extras/auto_power_off.py"
+    local langs_path="${KLIPPER_PATH}/klippy/extras/auto_power_off_langs"
+
+    # Multilingual diagnostic logs
+    print_status "$msg_checking_install_mode"
+    print_status "Paths checked:"
+    print_status "- Module: $module_path"
+    print_status "- Languages: $langs_path"
+
+    # Detailed check of previous state
+    if [ -f "$module_path" ]; then
+        print_status "$msg_module_detected"
+        UPDATE_MODE=true
+    elif [ -d "$langs_path" ]; then
+        print_status "$msg_lang_dir_detected"
+        UPDATE_MODE=true
+    fi
+
+    # Checking configuration files
+    if [ -f "$PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg" ] || 
+       [ -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off.cfg" ]; then
+        print_status "$msg_config_detected"
+        UPDATE_MODE=true
+    fi
+
+    # Command line argument can force mode
+    for arg in "$@"; do
+        if [ "$arg" = "--update" ]; then
+            UPDATE_MODE=true
+            break
+        fi
+    done
+
+    # Final mode log
+    print_status "$msg_final_mode ${UPDATE_MODE}"
+}
+
 # Determine script directory and version
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [ -z "$MODULE_PATH" ]; then
@@ -17,7 +83,7 @@ fi
 if [ -f "$MODULE_PATH" ]; then
     VERSION=$(grep -o "__version__ = \"[0-9.]*\"" "$MODULE_PATH" | cut -d'"' -f2)
 else
-    VERSION="2.0.4" # Default version if not found!
+    VERSION="2.0.8" # Default version if not found!
 fi
 
 # Colors for messages
@@ -27,7 +93,7 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Fonctions pour afficher les messages
+# Functions to display messages
 print_status() {
     if [ "$LANG_CHOICE" = "fr" ]; then
         echo -e "${BLUE}[INFO]${NC} $1"
@@ -64,30 +130,30 @@ print_error() {
 REPO_URL="https://raw.githubusercontent.com/JayceeB1/Klipper-Auto-Power-Off/main"
 REPO_GIT="https://github.com/JayceeB1/Klipper-Auto-Power-Off.git"
 
-# Ajout de fonctions pour vérifier et réparer le dépôt Git
+# Adding functions to check and repair the Git repository
 
-# Fonction pour vérifier et réparer un dépôt Git existant
+# Function to check and repair an existing Git repository
 repair_git_repo() {
     local repo_dir="$1"
     
     if [ -d "$repo_dir/.git" ]; then
         cd "$repo_dir" || return 1
         
-        # Vérifier si le dépôt est en bon état
+        # Check if the repository is in good condition
         if ! git status &>/dev/null; then
             print_warning "Dépôt Git corrompu, tentative de réparation..."
             
-            # Créer une sauvegarde du dépôt
+            # Create a backup of the repository
             local backup_dir="${repo_dir}_backup_$(date +%Y%m%d%H%M%S)"
             mkdir -p "$backup_dir"
             cp -r "$repo_dir"/* "$backup_dir"/ 2>/dev/null
             
-            # Réinitialiser complètement le dépôt
+            # Completely reset the repository
             rm -rf "$repo_dir"
             mkdir -p "$repo_dir"
             git clone "${REPO_GIT}" "$repo_dir"
             
-            # Restaurer les fichiers locaux modifiés
+            # Restore locally modified files
             if [ -d "$backup_dir" ]; then
                 cp -n "$backup_dir"/*.py "$repo_dir"/ 2>/dev/null
                 cp -n "$backup_dir"/*.md "$repo_dir"/ 2>/dev/null
@@ -98,7 +164,7 @@ repair_git_repo() {
             return 0
         fi
         
-        # Vérifier si l'URL distante est correcte (sensible à la casse)
+        # Check if the remote URL is correct (case-sensitive)
         local current_url=$(git config --get remote.origin.url)
         if [ "$current_url" != "${REPO_GIT}" ]; then
             print_warning "URL du dépôt incorrect : $current_url"
@@ -112,7 +178,7 @@ repair_git_repo() {
     return 1
 }
 
-# Fonction pour vérifier la version installée
+# Function to check the installed version
 verify_version() {
     local module_path="$1"
     if [ -f "$module_path" ]; then
@@ -126,7 +192,7 @@ verify_version() {
     fi
 }
 
-# Fonction pour redémarrer Moonraker
+# Function to restart Moonraker
 restart_moonraker() {
     if [ -t 0 ]; then
         if [ "$LANG_CHOICE" = "fr" ]; then
@@ -142,7 +208,7 @@ restart_moonraker() {
             echo "$MSG_WAIT_MOONRAKER"
             sleep 5
             
-            # Vérification du redémarrage réussi
+            # Check if the restart was successful
             if sudo systemctl is-active --quiet moonraker; then
                 print_success "$MSG_MOONRAKER_RESTARTED"
             else
@@ -158,16 +224,18 @@ restart_moonraker() {
             echo "$MSG_MOONRAKER_RESTART_CMD"
         fi
     else
-        # En mode non interactif, on redémarre automatiquement
+        # In non-interactive mode, restart automatically
         print_status "$MSG_MOONRAKER_RESTARTING"
         sudo systemctl restart moonraker
         print_success "$MSG_MOONRAKER_RESTARTED"
     fi
 }
 
-# Fonction pour détecter automatiquement les chemins principaux
+validate_installation_mode "$@"
+
+# Function to automatically detect main paths
 detect_paths() {
-    # Détection du répertoire Klipper
+    # Detect Klipper directory
     if [ -z "$KLIPPER_PATH" ]; then
         for p in ~/klipper /home/*/klipper; do
             if [ -d "$p" ]; then
@@ -177,7 +245,7 @@ detect_paths() {
         done
     fi
     
-    # Détection automatique du répertoire de configuration
+    # Automatically detect configuration directory
     if [ -z "$PRINTER_CONFIG_DIR" ]; then
         for p in ~/printer_data/config ~/klipper_config /home/*/printer_data/config /home/*/klipper_config; do
             if [ -d "$p" ]; then
@@ -187,7 +255,7 @@ detect_paths() {
         done
     fi
     
-    # Détection du chemin de moonraker.conf
+    # Detect path to moonraker.conf
     if [ -z "$MOONRAKER_CONF" ]; then
         for p in "$PRINTER_CONFIG_DIR/moonraker.conf" /home/*/printer_data/config/moonraker.conf /home/*/klipper_config/moonraker.conf; do
             if [ -f "$p" ]; then
@@ -197,7 +265,7 @@ detect_paths() {
         done
     fi
     
-    # Détection du dépôt auto_power_off existant
+    # Detect existing auto_power_off repository
     for p in ~/auto_power_off /home/*/auto_power_off; do
         if [ -d "$p" ]; then
             DEFAULT_REPO_PATH="$p"
@@ -223,10 +291,10 @@ MOONRAKER_CONF=""
 # Default repo path for update manager
 DEFAULT_REPO_PATH=""
 
-# Détecter les chemins automatiquement
+# Automatically detect paths
 detect_paths
 
-# Finaliser les chemins après détection
+# Finalize paths after detection
 if [ -n "$KLIPPER_PATH" ]; then
     MODULE_PATH="${KLIPPER_PATH}/klippy/extras/auto_power_off.py"
     LANGS_PATH="${KLIPPER_PATH}/klippy/extras/auto_power_off_langs"
@@ -278,7 +346,7 @@ add_update_manager_config() {
     local moonraker_conf="$1"
     local repo_path="$2"
 
-    # Vérification du fichier moonraker.asvc
+    # Check moonraker.asvc file
     if [ -z "$moonraker_asvc" ]; then
         moonraker_asvc="${PRINTER_CONFIG_DIR%/}/moonraker.asvc"
     fi
@@ -292,7 +360,7 @@ add_update_manager_config() {
             print_warning "auto_power_off service will not be automatically added"
         fi
     else
-        # Ajouter auto_power_off s'il n'est pas déjà présent
+        # Add auto_power_off if not already present
         if ! grep -q "auto_power_off" "$moonraker_asvc"; then
             echo "auto_power_off" >> "$moonraker_asvc"
             if [ "$LANG_CHOICE" = "fr" ]; then
@@ -303,7 +371,7 @@ add_update_manager_config() {
         fi
     fi
 
-    # Vérification du fichier de configuration
+    # Check configuration file
     if [ ! -f "$moonraker_conf" ]; then
         if [ "$LANG_CHOICE" = "fr" ]; then
             print_warning "Fichier moonraker.conf non trouvé à $moonraker_conf"
@@ -315,10 +383,10 @@ add_update_manager_config() {
         return 1
     fi
     
-    # Suppression de l'ancienne configuration si elle existe
-    # Cela évite les doublons ou les configurations incorrectes
+    # Remove old update manager configuration if it exists
+    # This avoids duplicates or incorrect configurations
     if grep -q "\[update_manager auto_power_off\]" "$moonraker_conf"; then
-        # Sauvegarder d'abord le fichier original
+        # Backup the original file first
         cp "$moonraker_conf" "${moonraker_conf}.bak"
         
         if [ "$LANG_CHOICE" = "fr" ]; then
@@ -327,8 +395,8 @@ add_update_manager_config() {
             print_status "Removing old update manager configuration"
         fi
         
-        # Supprimer toute la section [update_manager auto_power_off] et ses attributs
-        # Cette approche est plus robuste, car elle supprime également les anciennes URLs incorrectes
+        # Remove the entire [update_manager auto_power_off] section and its attributes
+        # This approach is more robust, as it also removes old incorrect URLs
         awk '
         BEGIN { skip=0; }
         /^\[update_manager auto_power_off\]/ { skip=1; next; }
@@ -336,11 +404,11 @@ add_update_manager_config() {
         { if (!skip) print; }
         ' "$moonraker_conf" > "${moonraker_conf}.tmp" && mv "${moonraker_conf}.tmp" "$moonraker_conf"
         
-        # Supprimer les lignes vides consécutives qui peuvent rester
+        # Remove any remaining consecutive empty lines
         sed -i '/^$/N;/^\n$/D' "$moonraker_conf"
     fi
     
-    # Ajout de la configuration avec gestion multilingue et URL correcte (sensible à la casse)
+    # Add configuration with multilingual support and correct URL (case-sensitive)
     cat >> "$moonraker_conf" << EOL
 
 [update_manager auto_power_off]
@@ -367,13 +435,13 @@ setup_git_repo() {
     local username="$2"
     local email="$3"
     
-    # Vérifier si le dossier de destination existe déjà
+    # Check if the destination folder already exists
     if [ -d "$repo_dir" ]; then
-        # Si un dépôt Git existe déjà, on le nettoie et on met à jour sa configuration
+        # If a Git repository already exists, clean it up and update its configuration
         if [ -d "$repo_dir/.git" ]; then
             cd "$repo_dir" || exit 1
             
-            # Sauvegarde des fichiers modifiés si nécessaire
+            # Backup modified files if necessary
             if [ "$(git status --porcelain | wc -l)" -gt 0 ]; then
                 if [ "$LANG_CHOICE" = "fr" ]; then
                     print_status "Sauvegarde des fichiers modifiés..."
@@ -384,13 +452,13 @@ setup_git_repo() {
                 git status --porcelain | grep -v '??' | awk '{print $2}' | xargs -I{} cp --parents {} /tmp/auto_power_off_backup/
             fi
             
-            # Supprimer l'ancienne configuration remote
+            # Remove the old remote configuration
             git remote remove origin 2>/dev/null || true
             
-            # Ajouter la nouvelle remote avec l'URL correcte (sensible à la casse)
+            # Add the new remote with the correct URL (case-sensitive)
             git remote add origin "${REPO_GIT}"
             
-            # Configurer git user si nécessaire
+            # Configure git user if necessary
             if ! git config --get user.name > /dev/null; then
                 git config user.name "$username"
             fi
@@ -399,7 +467,7 @@ setup_git_repo() {
                 git config user.email "$email"
             fi
             
-            # Ajouter le dépôt aux dossiers sécurisés
+            # Add the repository to safe directories
             git config --global --add safe.directory "$repo_dir"
             
             if [ "$LANG_CHOICE" = "fr" ]; then
@@ -410,29 +478,29 @@ setup_git_repo() {
             
             return 0
         else
-            # Si le dossier existe mais ce n'est pas un dépôt Git, on le supprime
+            # If the folder exists but is not a Git repository, remove it
             rm -rf "$repo_dir"
         fi
     fi
     
-    # Cloner directement le dépôt au lieu de créer un dossier vide
+    # Clone the repository directly instead of creating an empty folder
     if [ "$LANG_CHOICE" = "fr" ]; then
         print_status "Clonage du dépôt Git à $repo_dir"
     else
         print_status "Cloning Git repository to $repo_dir"
     fi
     
-    # Utiliser la bonne URL avec les majuscules
+    # Use the correct URL with proper case
     git clone "${REPO_GIT}" "$repo_dir"
     
-    # Entrer dans le dossier du dépôt
+    # Enter the repository folder
     cd "$repo_dir" || exit 1
     
-    # Configurer git user
+    # Configure git user
     git config user.name "$username"
     git config user.email "$email"
     
-    # Ajouter le dépôt aux dossiers sécurisés
+    # Add the repository to safe directories
     git config --global --add safe.directory "$repo_dir"
     
     return 0
@@ -713,7 +781,7 @@ if [ -z "$PRINTER_CONFIG_DIR" ]; then
         exit 1
     fi
 else
-    # Confirmer le chemin détecté automatiquement
+    # Confirm automatically detected path
     if [ -t 0 ]; then
         if [ "$LANG_CHOICE" = "fr" ]; then
             print_status "Répertoire de configuration détecté: $PRINTER_CONFIG_DIR"
@@ -895,13 +963,13 @@ ADD_MOONRAKER=""
 # Configure and handle moonraker.conf
 if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
     if [ "$UPDATE_MODE" = true ]; then
-        # Définir une valeur par défaut en mode mise à jour
+        # Define a default value in update mode
         ADD_MOONRAKER="y"
     fi
     
     if [ -z "$ADD_MOONRAKER" ] && [ -t 0 ]; then
         if [ -z "$MOONRAKER_CONF" ]; then
-            # Demander le chemin de moonraker.conf
+            # Ask for the path to moonraker.conf
             if [ "$LANG_CHOICE" = "fr" ]; then
                 echo "$MSG_MOONRAKER_PATH"
             else
@@ -913,7 +981,7 @@ if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
                 MOONRAKER_CONF="$PRINTER_CONFIG_DIR/moonraker.conf"
             fi
         else
-            # Confirmer le fichier moonraker.conf détecté
+            # Confirm detected moonraker.conf file
             if [ "$LANG_CHOICE" = "fr" ]; then
                 print_status "Fichier moonraker.conf détecté: $MOONRAKER_CONF"
                 read -p "Est-ce correct? [O/n]: " confirm_moonraker
@@ -931,7 +999,7 @@ if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
             fi
         fi
         
-        # Demander si l'utilisateur veut mettre à jour la configuration Moonraker
+        # Ask if the user wants to update the Moonraker configuration
         if [ "$LANG_CHOICE" = "fr" ]; then
             read -p "$MSG_ADD_MOONRAKER" ADD_MOONRAKER
         else
@@ -940,9 +1008,9 @@ if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
     fi
     
     if [[ "$ADD_MOONRAKER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
-        # Demander le chemin du dépôt si pas encore défini
+        # Ask for the repository path if not defined
         if [ -z "$REPO_PATH" ]; then
-            # Confirmer le dépôt local détecté
+            # Confirm detected local repository
             if [ -n "$DEFAULT_REPO_PATH" ] && [ -t 0 ]; then
                 if [ "$LANG_CHOICE" = "fr" ]; then
                     print_status "Dépôt local détecté: $DEFAULT_REPO_PATH"
@@ -988,11 +1056,10 @@ if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
         
         print_success "$MSG_REPO_CREATED"
         
-        
         # Add to moonraker.conf
         add_update_manager_config "$MOONRAKER_CONF" "$REPO_PATH"
         
-        # Redémarrer Moonraker pour appliquer les changements
+        # Restart Moonraker to apply changes
         restart_moonraker
     fi
 fi
@@ -1039,7 +1106,7 @@ else
     print_success "$MSG_INSTALL_COMPLETE"
 fi
 
-# Only show how to use if not in update mode or if explictly run interactively
+# Only show how to use if not in update mode or if explicitly run interactively
 if [ "$UPDATE_MODE" = false ] || [ -t 0 ]; then
     echo ""
     echo -e "${GREEN}$MSG_HOW_TO_USE${NC}"

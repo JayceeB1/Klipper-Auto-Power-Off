@@ -1,0 +1,42 @@
+sequenceDiagram
+    participant U as User
+    participant K as Klipper
+    participant APO as Auto Power Off
+    participant T as Timer (Reactor)
+    participant P as Power Device
+
+    Note over APO,T: Timer initiation
+    alt Print completed
+        K->>APO: _handle_print_complete()
+    else START command
+        U->>K: AUTO_POWEROFF START
+        K->>APO: cmd_AUTO_POWEROFF(option="start")
+    end
+    
+    APO->>T: reactor.register_timer(_check_conditions, waketime)
+    APO->>APO: Record countdown_end
+    
+    loop Until shutdown or cancellation
+        T-->>APO: _check_conditions(eventtime)
+        
+        alt Conditions not met
+            APO->>T: Return new delay (+60s)
+        else Conditions met
+            APO->>APO: _power_off()
+            APO->>P: Actual device shutdown
+            APO->>T: Return NEVER (end timer)
+        end
+    end
+    
+    opt Manual cancellation
+        U->>K: AUTO_POWEROFF CANCEL
+        K->>APO: cmd_AUTO_POWEROFF(option="cancel")
+        APO->>T: reactor.unregister_timer(shutdown_timer)
+        APO->>APO: shutdown_timer = None
+    end
+    
+    opt Cancellation by print detection
+        Note over K,APO: Print started
+        APO->>APO: Print detection in _check_conditions
+        APO->>T: Return NEVER (end timer)
+    end

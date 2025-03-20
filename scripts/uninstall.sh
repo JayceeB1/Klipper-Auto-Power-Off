@@ -61,19 +61,11 @@ fi
 
 # Fonctions pour afficher les messages formatés
 print_status() {
-    if [ "$LANG_CHOICE" = "fr" ]; then
-        echo -e "${BLUE}[INFO]${NC} $1"
-    else
-        echo -e "${BLUE}[INFO]${NC} $1"
-    fi
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 print_success() {
-    if [ "$LANG_CHOICE" = "fr" ]; then
-        echo -e "${GREEN}[OK]${NC} $1"
-    else
-        echo -e "${GREEN}[OK]${NC} $1"
-    fi
+    echo -e "${GREEN}[OK]${NC} $1"
 }
 
 print_warning() {
@@ -94,6 +86,8 @@ print_error() {
 
 # Définir les messages en fonction de la langue
 if [ "$LANG_CHOICE" = "fr" ]; then
+    MSG_SCRIPT_DESCRIPTION="Ce script va désinstaller le module Auto Power Off pour Klipper."
+    MSG_CONFIRM_UNINSTALL="Êtes-vous sûr de vouloir désinstaller Auto Power Off?"
     MSG_ROOT_ERROR="Ne pas exécuter ce script en tant que root (sudo). Utilisez votre utilisateur normal."
     MSG_INTRO="Ce script va désinstaller le module Auto Power Off pour Klipper."
     MSG_CONFIRM="Êtes-vous sûr de vouloir désinstaller Auto Power Off? [o/N] "
@@ -126,6 +120,26 @@ if [ "$LANG_CHOICE" = "fr" ]; then
     MSG_RESTART_CMD="Commandes pour redémarrer manuellement:"
     MSG_RESTART_KLIPPER_CMD="sudo systemctl restart klipper"
     MSG_RESTART_MOONRAKER_CMD="sudo systemctl restart moonraker"
+    MSG_MODULE_REMOVED="auto_power_off.py supprimé."
+    MSG_MODULE_NOT_FOUND="auto_power_off.py non trouvé."
+    MSG_LANGS_REMOVED="Répertoire de traductions supprimé."
+    MSG_LANGS_NOT_FOUND="Répertoire de traductions non trouvé."
+    MSG_FLUIDD_EN_REMOVED="Panneau Fluidd (EN) supprimé."
+    MSG_FLUIDD_FR_REMOVED="Panneau Fluidd (FR) supprimé."
+    MSG_MAINSAIL_EN_REMOVED="Panneau Mainsail (EN) supprimé."
+    MSG_MAINSAIL_CONFIG_EN_REMOVED="Configuration Mainsail (EN) supprimée."
+    MSG_MAINSAIL_FR_REMOVED="Panneau Mainsail (FR) supprimé."
+    MSG_MAINSAIL_CONFIG_FR_REMOVED="Configuration Mainsail (FR) supprimée."
+    MSG_LANG_PERSISTENCE_REMOVED="Fichier de persistance de langue supprimé."
+    MSG_BACKUP_CREATED="Sauvegarde créée: "
+    MSG_TITLE="Auto Power Off - Désinstallation"
+    MSG_PATH_KLIPPER="Klipper"
+    MSG_PATH_MODULE="Module"
+    MSG_PATH_TRANSLATIONS="Traductions"
+    MSG_PATH_CONFIG="Configuration"
+    MSG_PATH_PRINTER_CFG="printer.cfg"
+    MSG_PATH_MOONRAKER="moonraker.conf"
+    MSG_PATH_GIT="Dépôt Git"
 else
     # English messages
     MSG_ROOT_ERROR="Do not run this script as root (sudo). Use your normal user."
@@ -160,6 +174,26 @@ else
     MSG_RESTART_CMD="Commands to restart manually:"
     MSG_RESTART_KLIPPER_CMD="sudo systemctl restart klipper"
     MSG_RESTART_MOONRAKER_CMD="sudo systemctl restart moonraker"
+    MSG_MODULE_REMOVED="auto_power_off.py removed."
+    MSG_MODULE_NOT_FOUND="auto_power_off.py not found."
+    MSG_LANGS_REMOVED="Translation directory removed."
+    MSG_LANGS_NOT_FOUND="Translation directory not found."
+    MSG_FLUIDD_EN_REMOVED="Fluidd panel (EN) removed."
+    MSG_FLUIDD_FR_REMOVED="Fluidd panel (FR) removed."
+    MSG_MAINSAIL_EN_REMOVED="Mainsail panel (EN) removed."
+    MSG_MAINSAIL_CONFIG_EN_REMOVED="Mainsail configuration (EN) removed."
+    MSG_MAINSAIL_FR_REMOVED="Mainsail panel (FR) removed."
+    MSG_MAINSAIL_CONFIG_FR_REMOVED="Mainsail configuration (FR) removed."
+    MSG_LANG_PERSISTENCE_REMOVED="Language persistence file removed."
+    MSG_BACKUP_CREATED="Backup created: "
+    MSG_TITLE="Auto Power Off - Uninstallation"
+    MSG_PATH_KLIPPER="Klipper"
+    MSG_PATH_MODULE="Module"
+    MSG_PATH_TRANSLATIONS="Translations"
+    MSG_PATH_CONFIG="Configuration"
+    MSG_PATH_PRINTER_CFG="printer.cfg"
+    MSG_PATH_MOONRAKER="moonraker.conf"
+    MSG_PATH_GIT="Git Repository"
 fi
 
 # Vérifier si le script est exécuté en tant que root
@@ -170,7 +204,7 @@ fi
 
 # Afficher l'introduction
 echo -e "${BLUE}=========================================${NC}"
-echo -e "${BLUE}   Auto Power Off - Désinstallation     ${NC}"
+echo -e "${BLUE}   $MSG_TITLE     ${NC}"
 echo -e "${BLUE}=========================================${NC}"
 print_status "$MSG_INTRO"
 
@@ -253,13 +287,13 @@ detect_paths
 
 # Afficher les chemins détectés
 echo -e "$MSG_PATH_DETECTED"
-echo "- Klipper: $KLIPPER_PATH"
-echo "- Module: $MODULE_PATH"
-echo "- Traductions: $LANGS_PATH"
-echo "- Configuration: $PRINTER_CONFIG_DIR"
-echo "- printer.cfg: $PRINTER_CFG"
-echo "- moonraker.conf: $MOONRAKER_CONF"
-echo "- Dépôt Git: $REPO_PATH"
+echo "- $MSG_PATH_KLIPPER: $KLIPPER_PATH"
+echo "- $MSG_PATH_MODULE: $MODULE_PATH"
+echo "- $MSG_PATH_TRANSLATIONS: $LANGS_PATH"
+echo "- $MSG_PATH_CONFIG: $PRINTER_CONFIG_DIR"
+echo "- $MSG_PATH_PRINTER_CFG: $PRINTER_CFG"
+echo "- $MSG_PATH_MOONRAKER: $MOONRAKER_CONF"
+echo "- $MSG_PATH_GIT: $REPO_PATH"
 
 # Vérifier si le module est installé / Check if the module is installed
 if [ ! -f "$MODULE_PATH" ] && [ "$FORCE_MODE" = false ] && [ -t 0 ]; then
@@ -276,18 +310,18 @@ fi
 print_status "$MSG_REMOVE_MODULE"
 if [ -f "$MODULE_PATH" ]; then
     rm -f "$MODULE_PATH"
-    print_success "auto_power_off.py supprimé."
+    print_success "$MSG_MODULE_REMOVED"
 else
-    print_warning "auto_power_off.py non trouvé."
+    print_warning "$MSG_MODULE_NOT_FOUND"
 fi
 
 # Supprimer les fichiers de traduction / Remove translation files
 print_status "$MSG_REMOVE_LANGS"
 if [ -d "$LANGS_PATH" ]; then
     rm -rf "$LANGS_PATH"
-    print_success "Répertoire de traductions supprimé."
+    print_success "$MSG_LANGS_REMOVED"
 else
-    print_warning "Répertoire de traductions non trouvé."
+    print_warning "$MSG_LANGS_NOT_FOUND"
 fi
 
 # Supprimer les fichiers d'interface utilisateur / Remove UI files
@@ -295,29 +329,29 @@ print_status "$MSG_REMOVE_UI"
 # Fichiers Fluidd
 if [ -f "$PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg" ]; then
     rm -f "$PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg"
-    print_success "Panneau Fluidd (EN) supprimé."
+    print_success "$MSG_FLUIDD_EN_REMOVED"
 fi
 if [ -f "$PRINTER_CONFIG_DIR/fluidd/auto_power_off_fr.cfg" ]; then
     rm -f "$PRINTER_CONFIG_DIR/fluidd/auto_power_off_fr.cfg"
-    print_success "Panneau Fluidd (FR) supprimé."
+    print_success "$MSG_FLUIDD_FR_REMOVED"
 fi
 
 # Fichiers Mainsail
 if [ -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off.cfg" ]; then
     rm -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off.cfg"
-    print_success "Panneau Mainsail (EN) supprimé."
+    print_success "$MSG_MAINSAIL_EN_REMOVED"
 fi
 if [ -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel.cfg" ]; then
     rm -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel.cfg"
-    print_success "Configuration Mainsail (EN) supprimée."
+    print_success "$MSG_MAINSAIL_CONFIG_EN_REMOVED"
 fi
 if [ -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_fr.cfg" ]; then
     rm -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_fr.cfg"
-    print_success "Panneau Mainsail (FR) supprimé."
+    print_success "$MSG_MAINSAIL_FR_REMOVED"
 fi
 if [ -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel_fr.cfg" ]; then
     rm -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel_fr.cfg"
-    print_success "Configuration Mainsail (FR) supprimée."
+    print_success "$MSG_MAINSAIL_CONFIG_FR_REMOVED"
 fi
 
 # Nettoyer le fichier printer.cfg / Clean up printer.cfg file
@@ -326,12 +360,7 @@ if [ -f "$PRINTER_CFG" ]; then
     # Créer une sauvegarde avant de modifier / Create a backup before modifying
     BACKUP_FILE="${PRINTER_CFG}.bak.$(date +%Y%m%d%H%M%S)"
     cp "$PRINTER_CFG" "$BACKUP_FILE"
-    if [ "$LANG_CHOICE" = "fr" ]; then
-        print_status "Sauvegarde créée: $BACKUP_FILE"
-    else
-        print_status "Backup created: $BACKUP_FILE"
-    fi
-    print_success "$MSG_PRINTER_CFG_BACKUP $BACKUP_FILE"
+    print_status "$MSG_BACKUP_CREATED $BACKUP_FILE"
     
     # Supprimer la section [auto_power_off] et les lignes include associées
     # Remove [auto_power_off] section and associated include lines
@@ -370,12 +399,7 @@ if [ -f "$MOONRAKER_CONF" ]; then
     # Créer une sauvegarde avant de modifier / Create a backup before modifying
     BACKUP_FILE="${MOONRAKER_CONF}.bak.$(date +%Y%m%d%H%M%S)"
     cp "$MOONRAKER_CONF" "$BACKUP_FILE"
-    if [ "$LANG_CHOICE" = "fr" ]; then
-        print_status "Sauvegarde créée: $BACKUP_FILE"
-    else
-        print_status "Backup created: $BACKUP_FILE"
-    fi
-    print_success "$MSG_MOONRAKER_BACKUP $BACKUP_FILE"
+    print_status "$MSG_BACKUP_CREATED $BACKUP_FILE"
     
     # Supprimer la section [update_manager auto_power_off]
     # Remove [update_manager auto_power_off] section
@@ -410,7 +434,7 @@ fi
 # Supprimer le fichier de persistance de langue / Remove language persistence file
 if [ -f "$PRINTER_CONFIG_DIR/auto_power_off_language.conf" ]; then
     rm -f "$PRINTER_CONFIG_DIR/auto_power_off_language.conf"
-    print_success "Fichier de persistance de langue supprimé."
+    print_success "$MSG_LANG_PERSISTENCE_REMOVED"
 fi
 
 # Demander si l'utilisateur veut redémarrer Klipper / Ask if user wants to restart Klipper

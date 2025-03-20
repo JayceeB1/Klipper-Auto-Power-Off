@@ -17,6 +17,10 @@ Un module Klipper qui éteint automatiquement votre imprimante 3D après une imp
 - Compatible avec tous les types de dispositifs d'alimentation Moonraker (GPIO, TP-Link Smartplug, Tasmota, Shelly, etc.)
 - Focalisé sur l'interface web : les menus LCD ont été supprimés pour plus de simplicité
 
+## Documentation
+
+Pour une meilleure compréhension du fonctionnement interne d'Auto Power Off, consultez les [diagrammes de séquence](DIAGRAMS.md) qui illustrent les différents processus d'extinction et les interactions entre les composants.
+
 ## Prérequis
 
 - Klipper avec un [contrôle GPIO d'alimentation](https://www.klipper3d.org/Config_Reference.html#output_pin) correctement configuré
