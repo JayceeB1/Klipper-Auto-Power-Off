@@ -12,7 +12,7 @@ import socket
 from enum import Enum, auto
 from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Set, TypeVar, Generic, Type, cast
 
-__version__ = "2.0.8"  # Module version for update checking
+__version__ = "2.0.9"  # Module version for update checking
 
 # Définition des énumérations pour les états et méthodes
 class PowerOffMethod(Enum):
@@ -147,6 +147,22 @@ class AutoPowerOff:
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command('AUTO_POWEROFF', self.cmd_AUTO_POWEROFF,
                                desc=self.cmd_AUTO_POWEROFF_help)
+
+        # Convenience sub-commands so users can type e.g.
+        # AUTO_POWEROFF_DIAGNOSTIC VALUE=1 directly (Klipper's parser rejects
+        # bare tokens like `AUTO_POWEROFF DIAGNOSTIC`, see issue #14).
+        # Only register aliases that don't collide with existing gcode_macros
+        # shipped in ui/fluidd/*.cfg and ui/mainsail/*.cfg.
+        for _sub in ('DIAGNOSTIC', 'DRYRUN', 'VERSION', 'RESET'):
+            _alias = f'AUTO_POWEROFF_{_sub}'
+            try:
+                gcode.register_command(
+                    _alias,
+                    self._make_alias_handler(_sub.lower()),
+                    desc=self.cmd_AUTO_POWEROFF_help,
+                )
+            except Exception as e:
+                self.logger.warning(f"Could not register {_alias}: {e}")
 
         # Register for Fluidd/Mainsail status API / Enregistrement pour l'API de status Fluidd/Mainsail
         self.printer.register_event_handler("klippy:connect", self._handle_connect)
@@ -853,7 +869,14 @@ class AutoPowerOff:
             if mcu is None:
                 self._diagnostic_log(self.get_text("mcu_object_not_found"), level="warning")
                 return False
-            if mcu.is_shutdown():
+            # Klipper commit e96a944f (Apr 2025) removed MCU.is_shutdown().
+            # Prefer the Printer-level shutdown flag, fall back to MCU if present.
+            printer_is_shutdown = getattr(self.printer, 'is_shutdown', None)
+            if callable(printer_is_shutdown) and printer_is_shutdown():
+                self._diagnostic_log(self.get_text("mcu_shutdown_disconnected"), level="warning")
+                return False
+            mcu_is_shutdown = getattr(mcu, 'is_shutdown', None)
+            if callable(mcu_is_shutdown) and mcu_is_shutdown():
                 self._diagnostic_log(self.get_text("mcu_shutdown_disconnected"), level="warning")
                 return False
             return True
@@ -1161,7 +1184,7 @@ class AutoPowerOff:
                 self.logger.error(f"Error details: {data}")
             return
         
-        if hasattr(self, '_diagnostic_mode') and self._diagnostic_mode:
+        if getattr(self, 'diagnostic_mode', False):
             log_method = getattr(self.logger, level, self.logger.info)
             log_method(f"DIAGNOSTIC: {message}")
             if data:
@@ -1414,6 +1437,35 @@ class AutoPowerOff:
             'state': self.state,
             'version': git_version 
         }
+
+    def _make_alias_handler(self, option: str) -> Callable:
+        """
+        Build a gcode handler that forwards to cmd_AUTO_POWEROFF with a
+        preset OPTION. Used to expose sub-commands like
+        AUTO_POWEROFF_DIAGNOSTIC / AUTO_POWEROFF_RESET directly, since
+        Klipper's parser rejects bare tokens (`AUTO_POWEROFF DIAGNOSTIC`).
+
+        We inject OPTION into gcmd._params before dispatching; Klipper's
+        GCodeCommand reads parameters from this dict.
+        """
+        def _handler(gcmd):
+            params = getattr(gcmd, '_params', None)
+            previous = None
+            had_option = False
+            if isinstance(params, dict):
+                had_option = 'OPTION' in params
+                if had_option:
+                    previous = params['OPTION']
+                params['OPTION'] = option
+            try:
+                return self.cmd_AUTO_POWEROFF(gcmd)
+            finally:
+                if isinstance(params, dict):
+                    if had_option:
+                        params['OPTION'] = previous
+                    else:
+                        params.pop('OPTION', None)
+        return _handler
 
     cmd_AUTO_POWEROFF_help = "Configure or trigger automatic printer power off / Configure ou déclenche l'extinction automatique de l'imprimante"
 

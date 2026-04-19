@@ -39,15 +39,20 @@ Your support is greatly appreciated and helps keep this project maintained and i
 
 The module provides the following GCODE commands:
 
-- `AUTO_POWEROFF ON` - Globally enable the function
-- `AUTO_POWEROFF OFF` - Globally disable the function
-- `AUTO_POWEROFF START` - Manually start the timer
-- `AUTO_POWEROFF CANCEL` - Cancel the current timer
-- `AUTO_POWEROFF NOW` - Immediately power off the printer
-- `AUTO_POWEROFF STATUS` - Display detailed status
-- `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Enable diagnostic mode (0 to disable)
-- `AUTO_POWEROFF RESET` - Force reset of the module's internal state
-- `AUTO_POWEROFF DRYRUN VALUE=1` - Enable dry run mode (0 to disable)
+Klipper rejects bare parameters, so use either the `OPTION=` form or the
+dedicated aliases (the UI macros in `ui/fluidd/` and `ui/mainsail/` call
+them for you):
+
+- `AUTO_POWEROFF OPTION=ON` - Globally enable the function
+- `AUTO_POWEROFF OPTION=OFF` - Globally disable the function
+- `AUTO_POWEROFF OPTION=START` - Manually start the timer
+- `AUTO_POWEROFF OPTION=CANCEL` - Cancel the current timer
+- `AUTO_POWEROFF OPTION=NOW` - Immediately power off the printer
+- `AUTO_POWEROFF OPTION=STATUS` - Display detailed status
+- `AUTO_POWEROFF_DIAGNOSTIC VALUE=1` - Enable diagnostic mode (0 to disable)
+- `AUTO_POWEROFF_DRYRUN VALUE=1` - Enable dry-run mode (0 to disable)
+- `AUTO_POWEROFF_RESET` - Force reset of the module's internal state
+- `AUTO_POWEROFF_VERSION` - Print the currently loaded module version
 
 ## Key Features
 
@@ -317,12 +322,38 @@ If you prefer to uninstall manually, follow these steps:
 
 ### Common Problems and Solutions
 
-#### Module State Reset
+#### Timer doesn't start after a print finishes
 
-If your power device has been manually turned back on after an automatic power off and you encounter issues with subsequent power off commands, you can use the `AUTO_POWEROFF RESET` command to force a reset of the module's internal state:
+The module listens for Klipper's `print_stats:complete` event. That event
+is only emitted when `[print_stats]` (or `[virtual_sdcard]`, which pulls it
+in) cleanly marks the print as `complete`. If your slicer end G-code or
+your `END_PRINT` macro doesn't yield that transition, the timer won't
+start automatically.
+
+The most reliable fix is to call `AUTO_POWEROFF OPTION=START` explicitly
+at the end of your `END_PRINT` (and optionally `CANCEL_PRINT`) macro:
 
 ```gcode
-AUTO_POWEROFF RESET
+[gcode_macro END_PRINT]
+gcode:
+    # ... your existing end routine ...
+    M104 S0
+    M140 S0
+    AUTO_POWEROFF OPTION=START
+```
+
+Verify the auto-start works manually with `AUTO_POWEROFF OPTION=START`
+(or the `AUTO_POWEROFF_START` / `POWEROFF_START` macro depending on your
+UI). If that works but the automatic trigger doesn't, the event isn't
+reaching the module and the `END_PRINT` workaround is the supported
+path.
+
+#### Module State Reset
+
+If your power device has been manually turned back on after an automatic power off and you encounter issues with subsequent power off commands, you can use the `AUTO_POWEROFF_RESET` command to force a reset of the module's internal state:
+
+```gcode
+AUTO_POWEROFF_RESET
 ```
 
 This is particularly useful when:
@@ -364,7 +395,7 @@ To safely test the auto power off functionality without actually powering off yo
 
 To understand what capabilities your power device has:
 
-1. Enable diagnostic mode: `AUTO_POWEROFF DIAGNOSTIC VALUE=1`
+1. Enable diagnostic mode: `AUTO_POWEROFF_DIAGNOSTIC VALUE=1`
 2. Check logs with: `tail -f /tmp/klippy.log | grep -i auto_power_off`
 3. The logs will show what methods are available for your device
 4. This helps troubleshoot why power off might not be working

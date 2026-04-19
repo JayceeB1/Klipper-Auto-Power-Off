@@ -39,15 +39,20 @@ Votre soutien est grandement apprécié et aide à maintenir et améliorer ce pr
 
 Le module fournit les commandes GCODE suivantes :
 
-- `AUTO_POWEROFF ON` - Active globalement la fonction
-- `AUTO_POWEROFF OFF` - Désactive globalement la fonction
-- `AUTO_POWEROFF START` - Démarre manuellement le minuteur
-- `AUTO_POWEROFF CANCEL` - Annule le minuteur en cours
-- `AUTO_POWEROFF NOW` - Éteint immédiatement l'imprimante
-- `AUTO_POWEROFF STATUS` - Affiche l'état détaillé
-- `AUTO_POWEROFF DIAGNOSTIC VALUE=1` - Active le mode diagnostic (0 pour désactiver)
-- `AUTO_POWEROFF RESET` - Force la réinitialisation de l'état interne du module
-- `AUTO_POWEROFF DRYRUN VALUE=1` - Active le mode simulation (0 pour désactiver)
+Klipper rejette les paramètres sans `=`, utilisez donc soit la forme
+`OPTION=`, soit les alias dédiés (les macros fournies dans `ui/fluidd/`
+et `ui/mainsail/` les appellent automatiquement) :
+
+- `AUTO_POWEROFF OPTION=ON` - Active globalement la fonction
+- `AUTO_POWEROFF OPTION=OFF` - Désactive globalement la fonction
+- `AUTO_POWEROFF OPTION=START` - Démarre manuellement le minuteur
+- `AUTO_POWEROFF OPTION=CANCEL` - Annule le minuteur en cours
+- `AUTO_POWEROFF OPTION=NOW` - Éteint immédiatement l'imprimante
+- `AUTO_POWEROFF OPTION=STATUS` - Affiche l'état détaillé
+- `AUTO_POWEROFF_DIAGNOSTIC VALUE=1` - Active le mode diagnostic (0 pour désactiver)
+- `AUTO_POWEROFF_DRYRUN VALUE=1` - Active le mode simulation (0 pour désactiver)
+- `AUTO_POWEROFF_RESET` - Force la réinitialisation de l'état interne du module
+- `AUTO_POWEROFF_VERSION` - Affiche la version du module actuellement chargée
 
 ## Caractéristiques principales
 
@@ -317,12 +322,39 @@ Si vous préférez désinstaller manuellement, voici les étapes à suivre :
 
 ### Problèmes courants et solutions
 
-#### Réinitialisation de l'état du module
+#### Le minuteur ne démarre pas à la fin d'une impression
 
-Si votre périphérique d'alimentation a été rallumé manuellement après une extinction automatique et que vous rencontrez des problèmes avec les commandes d'extinction suivantes, vous pouvez utiliser la commande `AUTO_POWEROFF RESET` pour forcer une réinitialisation de l'état interne du module :
+Le module écoute l'événement Klipper `print_stats:complete`. Cet événement
+n'est émis que lorsque `[print_stats]` (ou `[virtual_sdcard]`, qui le
+déclare implicitement) marque proprement l'impression comme `complete`.
+Si votre gcode de fin ou votre macro `END_PRINT` ne produit pas cette
+transition, le minuteur ne démarrera pas automatiquement.
+
+La solution la plus fiable est d'appeler `AUTO_POWEROFF OPTION=START`
+explicitement à la fin de votre macro `END_PRINT` (et éventuellement de
+`CANCEL_PRINT`) :
 
 ```gcode
-AUTO_POWEROFF RESET
+[gcode_macro END_PRINT]
+gcode:
+    # ... votre routine de fin existante ...
+    M104 S0
+    M140 S0
+    AUTO_POWEROFF OPTION=START
+```
+
+Vérifiez que le démarrage manuel fonctionne avec
+`AUTO_POWEROFF OPTION=START` (ou la macro `AUTO_POWEROFF_START` /
+`POWEROFF_START` selon votre UI). Si oui mais que le déclenchement
+automatique reste muet, c'est que l'événement n'arrive pas au module :
+le workaround `END_PRINT` est alors la bonne voie.
+
+#### Réinitialisation de l'état du module
+
+Si votre périphérique d'alimentation a été rallumé manuellement après une extinction automatique et que vous rencontrez des problèmes avec les commandes d'extinction suivantes, vous pouvez utiliser la commande `AUTO_POWEROFF_RESET` pour forcer une réinitialisation de l'état interne du module :
+
+```gcode
+AUTO_POWEROFF_RESET
 ```
 
 Ceci est particulièrement utile lorsque :
@@ -364,7 +396,7 @@ Pour tester en toute sécurité la fonctionnalité d'extinction automatique sans
 
 Pour comprendre quelles capacités votre périphérique d'alimentation possède :
 
-1. Activez le mode diagnostic : `AUTO_POWEROFF DIAGNOSTIC VALUE=1`
+1. Activez le mode diagnostic : `AUTO_POWEROFF_DIAGNOSTIC VALUE=1`
 2. Vérifiez les logs avec : `tail -f /tmp/klippy.log | grep -i auto_power_off`
 3. Les logs montreront quelles méthodes sont disponibles pour votre périphérique
 4. Cela aide à résoudre pourquoi l'extinction pourrait ne pas fonctionner

@@ -83,7 +83,7 @@ fi
 if [ -f "$MODULE_PATH" ]; then
     VERSION=$(grep -o "__version__ = \"[0-9.]*\"" "$MODULE_PATH" | cut -d'"' -f2)
 else
-    VERSION="2.0.8" # Default version if not found!
+    VERSION="2.0.9" # Default version if not found!
 fi
 
 # Colors for messages
@@ -346,9 +346,26 @@ add_update_manager_config() {
     local moonraker_conf="$1"
     local repo_path="$2"
 
-    # Check moonraker.asvc file
+    # Check moonraker.asvc file — it lives next to printer_data, not inside
+    # printer_data/config. Search both locations plus common layouts.
     if [ -z "$moonraker_asvc" ]; then
-        moonraker_asvc="${PRINTER_CONFIG_DIR%/}/moonraker.asvc"
+        local config_dir="${PRINTER_CONFIG_DIR%/}"
+        local data_dir="$(dirname "$config_dir")"
+        for candidate in \
+            "$config_dir/moonraker.asvc" \
+            "$data_dir/moonraker.asvc" \
+            "$HOME/printer_data/moonraker.asvc" \
+            "$HOME/klipper_config/moonraker.asvc"; do
+            if [ -f "$candidate" ]; then
+                moonraker_asvc="$candidate"
+                break
+            fi
+        done
+        # If none exist, default to the canonical location so the warning
+        # below points at the right path for new installs.
+        if [ -z "$moonraker_asvc" ]; then
+            moonraker_asvc="$data_dir/moonraker.asvc"
+        fi
     fi
 
     if [ ! -f "$moonraker_asvc" ]; then

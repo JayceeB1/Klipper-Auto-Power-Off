@@ -5,6 +5,22 @@ All notable changes to the Klipper Auto Power Off project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.9] - 2026-04-19
+
+### Fixed
+* Compatibility with Klipper commit `e96a944f` that removed `MCU.is_shutdown()` — the module now uses `Printer.is_shutdown()` and falls back gracefully if `MCU.is_shutdown()` is absent. Resolves the "internal error on command AUTO_POWEROFF" regression that triggered an M112 after running Klipper updates (issue #16).
+* `_diagnostic_log` never emitted output because it checked `self._diagnostic_mode` while the attribute is `self.diagnostic_mode`. Diagnostic logs now actually appear in `klippy.log` when diagnostic mode is enabled (issue #14).
+* Mainsail panel config no longer uses the invalid `[button ...]` section (replaced by `[gcode_button ...]`) and drops the bare `[board_pins]` declaration that conflicted with `mainsail.cfg` (issue #13).
+* `install.sh` now locates `moonraker.asvc` in the `printer_data/` root as well as inside `printer_data/config/`, so the `auto_power_off` service is registered correctly on default Mainsail OS / KIAUH layouts (issue #15).
+
+### Added
+* Dedicated gcode aliases so `AUTO_POWEROFF DIAGNOSTIC VALUE=1` no longer errors out as "malformed command": use `AUTO_POWEROFF_DIAGNOSTIC VALUE=1`, `AUTO_POWEROFF_DRYRUN VALUE=1`, `AUTO_POWEROFF_VERSION`, or `AUTO_POWEROFF_RESET` directly. The existing `AUTO_POWEROFF OPTION=...` form keeps working (issue #14).
+* New Mainsail macros `POWEROFF_DIAGNOSTIC_ON/OFF`, `POWEROFF_DRYRUN_ON/OFF`, `POWEROFF_RESET` for users who drive the module from the UI macro buttons.
+
+### Changed
+* `ui/mainsail/auto_power_off.cfg` no longer includes `auto_power_off_panel.cfg` by default — the panel is an opt-in file for users who wire physical GPIO push-buttons, not something every install needs (issue #13, #15).
+* README / README_FR now document the canonical `AUTO_POWEROFF OPTION=X` form alongside the new aliases, and provide an explicit `END_PRINT` workaround for setups where `print_stats:complete` is not emitted after a print (issue #12).
+
 ## [2.0.8] - 2025-03-11
 
 ### Added
