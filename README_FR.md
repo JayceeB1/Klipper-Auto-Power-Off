@@ -245,6 +245,86 @@ Les paramètres suivants peuvent être configurés dans la section `[auto_power_
 | `network_test_attempts` | 3 | Nombre de tentatives pour tester la connectivité du périphérique réseau |
 | `network_test_interval` | 1.0 | Intervalle en secondes entre les tentatives de test de connectivité réseau |
 
+## Exemples de périphériques d'alimentation
+
+### Prise Tasmota
+
+Pour contrôler votre imprimante via un périphérique Tasmota, ajoutez une section `[power]` dans `moonraker.conf` :
+
+```ini
+# moonraker.conf
+[power printer_plug]
+type: tasmota
+address: 192.168.1.xxx      # Adresse IP de votre périphérique Tasmota
+# password: votre_mot_de_passe   # Décommentez si vous avez défini un mot de passe Tasmota
+# output_id: 1              # Décommentez pour les Tasmota multi-relais
+```
+
+Puis référencez ce nom dans `printer.cfg` :
+
+```ini
+[auto_power_off]
+power_device: printer_plug  # Doit correspondre au nom dans [power printer_plug]
+idle_timeout: 600
+temp_threshold: 40
+auto_poweroff_enabled: True
+moonraker_integration: True
+moonraker_url: http://localhost:7125
+```
+
+> **Note :** La section `[power]` est un bloc de **configuration Moonraker** (à placer dans `moonraker.conf`), pas un bloc Klipper. Auto Power Off appelle l'API Moonraker pour couper l'alimentation lorsque les conditions sont remplies.
+
+### Tasmota + Raspberry Pi — extinction séquentielle
+
+Une configuration courante consiste à brancher le RPi et l'imprimante sur la **même** prise Tasmota. Couper l'alimentation via le module couperait le courant du RPi immédiatement (arrêt brutal).
+
+**Approche recommandée — prises séparées :**
+
+Branchez le RPi sur une source d'alimentation permanente (ou une seconde prise Tasmota toujours active) et l'imprimante sur la prise contrôlée par Auto Power Off. Le RPi reste actif ; seule l'imprimante perd l'alimentation.
+
+```ini
+# moonraker.conf — contrôle uniquement la prise de l'imprimante
+[power printer_plug]
+type: tasmota
+address: 192.168.1.xxx
+```
+
+**Alternative — même prise, arrêt propre du RPi d'abord :**
+
+Si vous devez brancher les deux sur la même prise, demandez à Moonraker d'éteindre proprement le RPi avant que la prise soit coupée :
+
+```gcode
+# Dans printer.cfg — à ajouter dans END_PRINT ou à déclencher manuellement
+[gcode_macro SHUTDOWN_HOST_THEN_PRINTER]
+gcode:
+    AUTO_POWEROFF OPTION=START   # démarre le compte à rebours refroidissement/inactivité
+    # Une fois le compte à rebours écoulé, Moonraker coupera la prise via l'API.
+    # Pour arrêter proprement le RPi avant cela, ajoutez cette ligne :
+    {action_call_remote_method("shutdown_machine")}
+```
+
+> `action_call_remote_method("shutdown_machine")` demande à Moonraker d'effectuer un arrêt système propre. Appelez-le avant que la prise soit coupée pour laisser le temps au RPi de s'éteindre. Il n'y a pas de délai par périphérique intégré dans Auto Power Off ; pour un délai fixe de 2 minutes avant la coupure de la prise, définissez `idle_timeout: 120` dans `[auto_power_off]` et appelez `AUTO_POWEROFF OPTION=START` à la fin de votre impression.
+
+### Dépannage — "Repo has diverged from remote" dans le gestionnaire de mises à jour
+
+Les versions antérieures à 2.1.0 créaient un commit git local dans `~/auto_power_off` lors de l'installation. Ce commit n'existant pas dans l'historique GitHub, le gestionnaire de mises à jour de Moonraker signale "diverged from remote" et refuse de mettre à jour.
+
+**Correction unique :**
+```bash
+cd ~/auto_power_off
+git fetch origin
+git reset --hard origin/main
+```
+
+Ensuite, relancez le script d'installation une fois pour restaurer les fichiers locaux :
+```bash
+wget -O install.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
+chmod +x install.sh
+./install.sh
+```
+
+La version 2.1.0+ ne crée jamais de commits locaux ; le problème ne se reproduira plus.
+
 ## Désinstallation
 
 Pour désinstaller complètement le module Auto Power Off, un script de désinstallation est maintenant disponible :

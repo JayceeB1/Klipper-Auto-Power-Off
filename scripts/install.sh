@@ -35,9 +35,9 @@ validate_installation_mode() {
         msg_final_mode="Final installation mode:"
     fi
 
-    # Paths to check
-    local module_path="${KLIPPER_PATH}/klippy/extras/auto_power_off.py"
-    local langs_path="${KLIPPER_PATH}/klippy/extras/auto_power_off_langs"
+    # Paths to check — MODULE_PATH is already resolved at the top of the script
+    local module_path="${MODULE_PATH:-${HOME}/klipper/klippy/extras/auto_power_off.py}"
+    local langs_path="${module_path%/auto_power_off.py}/auto_power_off_langs"
 
     # Multilingual diagnostic logs
     print_status "$msg_checking_install_mode"
@@ -54,9 +54,17 @@ validate_installation_mode() {
         UPDATE_MODE=true
     fi
 
-    # Checking configuration files
-    if [ -f "$PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg" ] || 
-       [ -f "$PRINTER_CONFIG_DIR/mainsail/auto_power_off.cfg" ]; then
+    # Checking configuration files — PRINTER_CONFIG_DIR may not be set yet;
+    # search common locations as a fallback.
+    local cfg_search_dirs="${PRINTER_CONFIG_DIR} ${HOME}/printer_data/config ${HOME}/klipper_config"
+    local found_cfg=false
+    for _d in $cfg_search_dirs; do
+        if [ -n "$_d" ] && ([ -f "$_d/fluidd/auto_power_off.cfg" ] || \
+                             [ -f "$_d/mainsail/auto_power_off.cfg" ]); then
+            found_cfg=true; break
+        fi
+    done
+    if [ "$found_cfg" = true ]; then
         print_status "$msg_config_detected"
         UPDATE_MODE=true
     fi
@@ -83,7 +91,7 @@ fi
 if [ -f "$MODULE_PATH" ]; then
     VERSION=$(grep -o "__version__ = \"[0-9.]*\"" "$MODULE_PATH" | cut -d'"' -f2)
 else
-    VERSION="2.0.9" # Default version if not found!
+    VERSION="2.1.0" # Default version if not found!
 fi
 
 # Colors for messages
@@ -403,9 +411,11 @@ add_update_manager_config() {
     # Remove old update manager configuration if it exists
     # This avoids duplicates or incorrect configurations
     if grep -q "\[update_manager auto_power_off\]" "$moonraker_conf"; then
-        # Backup the original file first
-        cp "$moonraker_conf" "${moonraker_conf}.bak"
-        
+        # Backup only once — avoid overwriting a good .bak on re-runs
+        if [ ! -f "${moonraker_conf}.bak" ]; then
+            cp "$moonraker_conf" "${moonraker_conf}.bak"
+        fi
+
         if [ "$LANG_CHOICE" = "fr" ]; then
             print_status "Suppression de l'ancienne configuration du gestionnaire de mise à jour"
         else
@@ -523,66 +533,35 @@ setup_git_repo() {
     return 0
 }
 
-# Function to copy module files to repo and track them in git
-copy_and_track_files() {
+# Install module files from the cloned repo into the Klipper extras directory.
+# This function never creates git commits — the ~/auto_power_off repo must stay
+# as a clean clone so Moonraker's update manager can pull without divergence.
+install_from_repo() {
     local repo_dir="$1"
-    local module_path="$2"
-    local langs_path="$3"
-    local config_dir="$4"
-    
-    # Make sure directories exist
-    mkdir -p "$repo_dir/src/auto_power_off_langs"
-    mkdir -p "$repo_dir/ui/fluidd"
-    mkdir -p "$repo_dir/ui/mainsail"
-    mkdir -p "$repo_dir/scripts"
-    
-    # Copy current script to scripts directory
-    cp "$0" "$repo_dir/scripts/install.sh"
-    chmod +x "$repo_dir/scripts/install.sh"
-    
-    # Copy Python module and translations
-    if [ -f "$module_path" ]; then
-        cp "$module_path" "$repo_dir/src/"
+
+    # Python module
+    if [ -f "$repo_dir/src/auto_power_off.py" ]; then
+        cp "$repo_dir/src/auto_power_off.py" "$MODULE_PATH"
     fi
-    
-    if [ -d "$langs_path" ]; then
-        cp "$langs_path"/* "$repo_dir/src/auto_power_off_langs/" 2>/dev/null || true
+
+    # Language files
+    mkdir -p "$LANGS_PATH"
+    if [ -d "$repo_dir/src/auto_power_off_langs" ]; then
+        cp "$repo_dir/src/auto_power_off_langs/"*.json "$LANGS_PATH/" 2>/dev/null || true
     fi
-    
-    # Copy UI files
-    cp "$config_dir/fluidd/auto_power_off.cfg" "$repo_dir/ui/fluidd/" 2>/dev/null || true
-    cp "$config_dir/fluidd/auto_power_off_fr.cfg" "$repo_dir/ui/fluidd/" 2>/dev/null || true
-    cp "$config_dir/mainsail/auto_power_off.cfg" "$repo_dir/ui/mainsail/" 2>/dev/null || true
-    cp "$config_dir/mainsail/auto_power_off_panel.cfg" "$repo_dir/ui/mainsail/" 2>/dev/null || true
-    cp "$config_dir/mainsail/auto_power_off_fr.cfg" "$repo_dir/ui/mainsail/" 2>/dev/null || true
-    cp "$config_dir/mainsail/auto_power_off_panel_fr.cfg" "$repo_dir/ui/mainsail/" 2>/dev/null || true
-    
-    # Copy README and LICENSE files
-    cp "$SCRIPT_DIR/README.md" "$repo_dir/" 2>/dev/null || true
-    cp "$SCRIPT_DIR/README_FR.md" "$repo_dir/" 2>/dev/null || true
-    cp "$SCRIPT_DIR/LICENSE" "$repo_dir/" 2>/dev/null || true
-    cp "$SCRIPT_DIR/CHANGELOG.md" "$repo_dir/" 2>/dev/null || true
-    
-    # Add all files to git
-    cd "$repo_dir" || exit 1
-    git add -A
-    
-    # Commit changes only if there are staged changes
-    if git diff --cached --quiet; then
-        if [ "$LANG_CHOICE" = "fr" ]; then
-            print_status "Aucun changement à enregistrer dans Git"
-        else
-            print_status "No changes to commit to Git"
-        fi
-    else
-        git commit -m "Auto Power Off v$VERSION - Updated on $(date +"%Y-%m-%d")"
-        if [ "$LANG_CHOICE" = "fr" ]; then
-            print_success "Fichiers enregistrés dans Git"
-        else
-            print_success "Files committed to Git"
-        fi
+
+    # UI config files — only for the selected interface
+    if [ "$UI_TYPE" = "fluidd" ] || [ "$UI_TYPE" = "both" ]; then
+        cp "$repo_dir/ui/fluidd/auto_power_off.cfg" "$PRINTER_CONFIG_DIR/fluidd/" 2>/dev/null || true
+        cp "$repo_dir/ui/fluidd/auto_power_off_fr.cfg" "$PRINTER_CONFIG_DIR/fluidd/" 2>/dev/null || true
     fi
-    
+    if [ "$UI_TYPE" = "mainsail" ] || [ "$UI_TYPE" = "both" ]; then
+        cp "$repo_dir/ui/mainsail/auto_power_off.cfg" "$PRINTER_CONFIG_DIR/mainsail/" 2>/dev/null || true
+        cp "$repo_dir/ui/mainsail/auto_power_off_panel.cfg" "$PRINTER_CONFIG_DIR/mainsail/" 2>/dev/null || true
+        cp "$repo_dir/ui/mainsail/auto_power_off_fr.cfg" "$PRINTER_CONFIG_DIR/mainsail/" 2>/dev/null || true
+        cp "$repo_dir/ui/mainsail/auto_power_off_panel_fr.cfg" "$PRINTER_CONFIG_DIR/mainsail/" 2>/dev/null || true
+    fi
+
     return 0
 }
 
@@ -852,48 +831,54 @@ if [ "$UPDATE_MODE" = false ] && [ -t 0 ]; then
     esac
 fi
 
-# Create directories for the UI
-mkdir -p $PRINTER_CONFIG_DIR/fluidd
+# Create directories for the UI (only those actually needed)
+if [ "$UI_TYPE" = "fluidd" ] || [ "$UI_TYPE" = "both" ]; then
+    mkdir -p "$PRINTER_CONFIG_DIR/fluidd"
+fi
 if [ "$UI_TYPE" = "mainsail" ] || [ "$UI_TYPE" = "both" ]; then
-    mkdir -p $PRINTER_CONFIG_DIR/mainsail
+    mkdir -p "$PRINTER_CONFIG_DIR/mainsail"
 fi
 print_success "$MSG_UI_DIRS_CREATED"
 
-# Download the Python module
-print_status "$MSG_DL_MODULE"
-wget -q -O ~/klipper/klippy/extras/auto_power_off.py "$REPO_URL/src/auto_power_off.py"
-print_success "$MSG_MODULE_DOWNLOADED"
+# In UPDATE_MODE the repo was already updated by Moonraker's git pull;
+# install_from_repo (called below) copies from there. Skip wget entirely.
+if [ "$UPDATE_MODE" = false ]; then
+    # Download the Python module
+    print_status "$MSG_DL_MODULE"
+    wget -q -O ~/klipper/klippy/extras/auto_power_off.py "$REPO_URL/src/auto_power_off.py"
+    print_success "$MSG_MODULE_DOWNLOADED"
 
-# Create language directories
-print_status "$MSG_CREATING_LANG_DIRS"
-mkdir -p ~/klipper/klippy/extras/auto_power_off_langs
-print_success "$MSG_LANG_DIRS_CREATED"
+    # Create language directories
+    print_status "$MSG_CREATING_LANG_DIRS"
+    mkdir -p ~/klipper/klippy/extras/auto_power_off_langs
+    print_success "$MSG_LANG_DIRS_CREATED"
 
-# Download translation files
-print_status "$MSG_DL_EN_TRANS"
-wget -q -O ~/klipper/klippy/extras/auto_power_off_langs/en.json "$REPO_URL/src/auto_power_off_langs/en.json"
-print_success "$MSG_EN_TRANS_DOWNLOADED"
+    # Download translation files
+    print_status "$MSG_DL_EN_TRANS"
+    wget -q -O ~/klipper/klippy/extras/auto_power_off_langs/en.json "$REPO_URL/src/auto_power_off_langs/en.json"
+    print_success "$MSG_EN_TRANS_DOWNLOADED"
 
-print_status "$MSG_DL_FR_TRANS"
-wget -q -O ~/klipper/klippy/extras/auto_power_off_langs/fr.json "$REPO_URL/src/auto_power_off_langs/fr.json"
-print_success "$MSG_FR_TRANS_DOWNLOADED"
+    print_status "$MSG_DL_FR_TRANS"
+    wget -q -O ~/klipper/klippy/extras/auto_power_off_langs/fr.json "$REPO_URL/src/auto_power_off_langs/fr.json"
+    print_success "$MSG_FR_TRANS_DOWNLOADED"
 
-# Create Fluidd configuration file
-if [ "$UI_TYPE" = "fluidd" ] || [ "$UI_TYPE" = "both" ]; then
-    print_status "$MSG_CREATE_FLUIDD"
-    wget -q -O $PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg "$REPO_URL/ui/fluidd/auto_power_off.cfg"
-    wget -q -O $PRINTER_CONFIG_DIR/fluidd/auto_power_off_fr.cfg "$REPO_URL/ui/fluidd/auto_power_off_fr.cfg"
-    print_success "$MSG_FLUIDD_CREATED"
-fi
+    # Create Fluidd configuration file
+    if [ "$UI_TYPE" = "fluidd" ] || [ "$UI_TYPE" = "both" ]; then
+        print_status "$MSG_CREATE_FLUIDD"
+        wget -q -O "$PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg" "$REPO_URL/ui/fluidd/auto_power_off.cfg"
+        wget -q -O "$PRINTER_CONFIG_DIR/fluidd/auto_power_off_fr.cfg" "$REPO_URL/ui/fluidd/auto_power_off_fr.cfg"
+        print_success "$MSG_FLUIDD_CREATED"
+    fi
 
-# Create Mainsail configuration file
-if [ "$UI_TYPE" = "mainsail" ] || [ "$UI_TYPE" = "both" ]; then
-    print_status "$MSG_CREATE_MAINSAIL"
-    wget -q -O $PRINTER_CONFIG_DIR/mainsail/auto_power_off.cfg "$REPO_URL/ui/mainsail/auto_power_off.cfg"
-    wget -q -O $PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel.cfg "$REPO_URL/ui/mainsail/auto_power_off_panel.cfg"
-    wget -q -O $PRINTER_CONFIG_DIR/mainsail/auto_power_off_fr.cfg "$REPO_URL/ui/mainsail/auto_power_off_fr.cfg"
-    wget -q -O $PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel_fr.cfg "$REPO_URL/ui/mainsail/auto_power_off_panel_fr.cfg"
-    print_success "$MSG_MAINSAIL_CREATED"
+    # Create Mainsail configuration file
+    if [ "$UI_TYPE" = "mainsail" ] || [ "$UI_TYPE" = "both" ]; then
+        print_status "$MSG_CREATE_MAINSAIL"
+        wget -q -O "$PRINTER_CONFIG_DIR/mainsail/auto_power_off.cfg" "$REPO_URL/ui/mainsail/auto_power_off.cfg"
+        wget -q -O "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel.cfg" "$REPO_URL/ui/mainsail/auto_power_off_panel.cfg"
+        wget -q -O "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_fr.cfg" "$REPO_URL/ui/mainsail/auto_power_off_fr.cfg"
+        wget -q -O "$PRINTER_CONFIG_DIR/mainsail/auto_power_off_panel_fr.cfg" "$REPO_URL/ui/mainsail/auto_power_off_panel_fr.cfg"
+        print_success "$MSG_MAINSAIL_CREATED"
+    fi
 fi
 
 # Ask user if they want to add the configuration to printer.cfg
@@ -975,66 +960,41 @@ EOL
     fi
 fi
 
-ADD_MOONRAKER=""
-
-# Configure and handle moonraker.conf
-if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
-    if [ "$UPDATE_MODE" = true ]; then
-        # Define a default value in update mode
-        ADD_MOONRAKER="y"
+# UPDATE_MODE: Moonraker update manager already ran git pull on the repo.
+# Just copy the updated files to klipper/extras — never touch moonraker.conf
+# or create git commits (that would cause "diverged from remote" again).
+if [ "$UPDATE_MODE" = true ]; then
+    if [ -n "$DEFAULT_REPO_PATH" ] && [ -d "$DEFAULT_REPO_PATH/src" ]; then
+        install_from_repo "$DEFAULT_REPO_PATH"
     fi
-    
-    if [ -z "$ADD_MOONRAKER" ] && [ -t 0 ]; then
-        if [ -z "$MOONRAKER_CONF" ]; then
-            # Ask for the path to moonraker.conf
-            if [ "$LANG_CHOICE" = "fr" ]; then
-                echo "$MSG_MOONRAKER_PATH"
-            else
-                echo "$MSG_MOONRAKER_PATH"
-            fi
-            read -r MOONRAKER_CONF
-            
-            if [ -z "$MOONRAKER_CONF" ]; then
-                MOONRAKER_CONF="$PRINTER_CONFIG_DIR/moonraker.conf"
-            fi
-        else
-            # Confirm detected moonraker.conf file
-            if [ "$LANG_CHOICE" = "fr" ]; then
-                print_status "Fichier moonraker.conf détecté: $MOONRAKER_CONF"
-                read -p "Est-ce correct? [O/n]: " confirm_moonraker
-                if [[ "$confirm_moonraker" =~ ^[Nn] ]]; then
-                    print_status "Veuillez entrer le chemin correct:"
-                    read -r MOONRAKER_CONF
-                fi
-            else
-                print_status "Moonraker.conf file detected: $MOONRAKER_CONF"
-                read -p "Is this correct? [Y/n]: " confirm_moonraker
-                if [[ "$confirm_moonraker" =~ ^[Nn] ]]; then
-                    print_status "Please enter the correct path:"
-                    read -r MOONRAKER_CONF
-                fi
-            fi
-        fi
-        
-        # Ask if the user wants to update the Moonraker configuration
+# Interactive fresh install / re-install: offer moonraker update manager setup.
+elif [ -t 0 ]; then
+    if [ -z "$MOONRAKER_CONF" ]; then
+        echo "$MSG_MOONRAKER_PATH"
+        read -r MOONRAKER_CONF
+        [ -z "$MOONRAKER_CONF" ] && MOONRAKER_CONF="$PRINTER_CONFIG_DIR/moonraker.conf"
+    else
         if [ "$LANG_CHOICE" = "fr" ]; then
-            read -p "$MSG_ADD_MOONRAKER" ADD_MOONRAKER
+            print_status "Fichier moonraker.conf détecté: $MOONRAKER_CONF"
+            read -p "Est-ce correct? [O/n]: " confirm_moonraker
+            [[ "$confirm_moonraker" =~ ^[Nn] ]] && { print_status "Veuillez entrer le chemin correct:"; read -r MOONRAKER_CONF; }
         else
-            read -p "$MSG_ADD_MOONRAKER" ADD_MOONRAKER
+            print_status "Moonraker.conf file detected: $MOONRAKER_CONF"
+            read -p "Is this correct? [Y/n]: " confirm_moonraker
+            [[ "$confirm_moonraker" =~ ^[Nn] ]] && { print_status "Please enter the correct path:"; read -r MOONRAKER_CONF; }
         fi
     fi
-    
+
+    read -p "$MSG_ADD_MOONRAKER" ADD_MOONRAKER
+
     if [[ "$ADD_MOONRAKER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
-        # Ask for the repository path if not defined
         if [ -z "$REPO_PATH" ]; then
-            # Confirm detected local repository
-            if [ -n "$DEFAULT_REPO_PATH" ] && [ -t 0 ]; then
+            if [ -n "$DEFAULT_REPO_PATH" ]; then
                 if [ "$LANG_CHOICE" = "fr" ]; then
                     print_status "Dépôt local détecté: $DEFAULT_REPO_PATH"
                     read -p "Est-ce correct? [O/n]: " confirm_repo
                     if [[ "$confirm_repo" =~ ^[Nn] ]]; then
-                        print_status "Veuillez entrer le chemin correct:"
-                        read -r REPO_PATH
+                        print_status "Veuillez entrer le chemin correct:"; read -r REPO_PATH
                     else
                         REPO_PATH="$DEFAULT_REPO_PATH"
                     fi
@@ -1042,41 +1002,26 @@ if [ "$UPDATE_MODE" = true ] || [ -t 0 ]; then
                     print_status "Local repository detected: $DEFAULT_REPO_PATH"
                     read -p "Is this correct? [Y/n]: " confirm_repo
                     if [[ "$confirm_repo" =~ ^[Nn] ]]; then
-                        print_status "Please enter the correct path:"
-                        read -r REPO_PATH
+                        print_status "Please enter the correct path:"; read -r REPO_PATH
                     else
                         REPO_PATH="$DEFAULT_REPO_PATH"
                     fi
                 fi
             else
-                echo "$MSG_REPO_PATH"
-                read -r REPO_PATH
-                
-                if [ -z "$REPO_PATH" ]; then
-                    REPO_PATH="$DEFAULT_REPO_PATH"
-                fi
+                echo "$MSG_REPO_PATH"; read -r REPO_PATH
+                [ -z "$REPO_PATH" ] && REPO_PATH="$DEFAULT_REPO_PATH"
             fi
         fi
-        
-        # Set up repository
+
         print_status "$MSG_CREATING_REPO"
-        
-        # Set up git user info
         GIT_USERNAME="$(whoami)"
         GIT_EMAIL="$GIT_USERNAME@$(hostname)"
-        
-        # Initialize git repository
+
+        # Clone or update remote URL — never commit local changes
         setup_git_repo "$REPO_PATH" "$GIT_USERNAME" "$GIT_EMAIL"
-        
-        # Copy files to repo and track them in git
-        copy_and_track_files "$REPO_PATH" "$MODULE_PATH" "$LANGS_PATH" "$PRINTER_CONFIG_DIR"
-        
         print_success "$MSG_REPO_CREATED"
-        
-        # Add to moonraker.conf
+
         add_update_manager_config "$MOONRAKER_CONF" "$REPO_PATH"
-        
-        # Restart Moonraker to apply changes
         restart_moonraker
     fi
 fi

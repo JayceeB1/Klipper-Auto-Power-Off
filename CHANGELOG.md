@@ -5,6 +5,22 @@ All notable changes to the Klipper Auto Power Off project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-21
+
+### Fixed
+* Install script no longer creates a Fluidd config directory when the user selects Mainsail only (issue #17).
+* Install script in UPDATE_MODE (triggered by Moonraker's update manager) no longer re-runs git/Moonraker operations, preventing the "Repo has diverged from remote" error caused by stray local commits (issue #17).
+* `moonraker.conf.bak` is now created only once on the first update-manager setup run; subsequent re-runs no longer overwrite the backup (issue #17).
+* `validate_installation_mode` now correctly detects a prior installation by checking the already-resolved `MODULE_PATH` variable instead of an empty `KLIPPER_PATH`, so `UPDATE_MODE` is properly set on re-runs.
+
+### Changed
+* `copy_and_track_files` (which committed local changes into the cloned repo and caused "diverged from remote") replaced by `install_from_repo`, which copies files from the local clone to klipper/extras without creating git commits.
+* wget file downloads are now skipped in UPDATE_MODE; files are copied directly from the already-updated local repo clone instead.
+
+### Added
+* Documentation for Tasmota smart-plug configuration and RPi sequential-shutdown patterns (issue #18).
+* Troubleshooting section for "Repo has diverged from remote" with a one-time `git reset --hard origin/main` fix for users on older installs.
+
 ## [2.0.9] - 2026-04-19
 
 ### Fixed

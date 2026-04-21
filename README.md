@@ -245,6 +245,87 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `network_test_attempts` | 3 | Number of attempts to test network device connectivity |
 | `network_test_interval` | 1.0 | Interval in seconds between network connectivity test attempts |
 
+## Power Device Examples
+
+### Tasmota Smart Plug
+
+To control your printer via a Tasmota device, add a `[power]` section to `moonraker.conf`:
+
+```ini
+# moonraker.conf
+[power printer_plug]
+type: tasmota
+address: 192.168.1.xxx      # IP address of your Tasmota device
+# password: your_password   # Uncomment if you set a Tasmota password
+# output_id: 1              # Uncomment for multi-relay Tasmota devices
+```
+
+Then reference that device name in `printer.cfg`:
+
+```ini
+[auto_power_off]
+power_device: printer_plug  # Must match the name in [power printer_plug]
+idle_timeout: 600
+temp_threshold: 40
+auto_poweroff_enabled: True
+moonraker_integration: True
+moonraker_url: http://localhost:7125
+```
+
+> **Note:** The `[power]` section is a **Moonraker** configuration block (goes in `moonraker.conf`), not a Klipper block. Auto Power Off calls the Moonraker API to flip the switch when conditions are met.
+
+### Tasmota + Raspberry Pi Sequential Shutdown
+
+A common setup is having the RPi and the printer on the **same** Tasmota outlet. Cutting power via the module would kill the RPi immediately (unclean shutdown).
+
+**Recommended approach — separate outlets:**
+
+Put the RPi on a permanent power source (or a second, always-on Tasmota outlet) and the printer on the outlet controlled by Auto Power Off. The RPi stays alive; only the printer loses power.
+
+```ini
+# moonraker.conf — controls only the printer's outlet
+[power printer_plug]
+type: tasmota
+address: 192.168.1.xxx
+```
+
+**Alternative — same outlet, clean shutdown first:**
+
+If you must put both on the same outlet, use Moonraker's `bound_service` so that Moonraker gracefully shuts down Klipper (and the RPi) before the outlet is cut. Configure a Klipper macro to trigger a host shutdown, then let the Tasmota outlet cut power after the RPi has fully powered off:
+
+```gcode
+# In printer.cfg — add to your END_PRINT or trigger manually
+[gcode_macro SHUTDOWN_HOST_THEN_PRINTER]
+gcode:
+    AUTO_POWEROFF OPTION=START   # start the idle/cooling countdown
+    # Once the countdown fires, Moonraker will call /machine/device_power/device
+    # to turn off the outlet. To also shut down the RPi cleanly beforehand,
+    # add this line — it triggers an OS-level shutdown 60 s before outlet cut:
+    {action_call_remote_method("shutdown_machine")}
+```
+
+> `action_call_remote_method("shutdown_machine")` asks Moonraker to shut down the host OS. Call it before the outlet is cut so the RPi has time to power off cleanly. There is no built-in per-device delay in Auto Power Off; for a fixed 2-minute cooling delay before the outlet cuts, set `idle_timeout: 120` in `[auto_power_off]` and call `AUTO_POWEROFF OPTION=START` at the end of your print.
+
+### Troubleshooting Update Manager "Repo has diverged from remote"
+
+Versions before 2.1.0 created a local git commit inside `~/auto_power_off` during installation. This commit does not exist in the GitHub history, so Moonraker's update manager reports "diverged from remote" and refuses to update.
+
+**One-time fix:**
+```bash
+cd ~/auto_power_off
+git fetch origin
+git reset --hard origin/main
+```
+
+After that, re-run the installer once to restore any local files that were only in the diverged commit:
+```bash
+wget -O install.sh https://raw.githubusercontent.com/JayceeB1/klipper-auto-power-off/main/scripts/install.sh
+chmod +x install.sh
+./install.sh
+```
+
+Version 2.1.0+ never creates local commits, so the problem will not recur.
+
 ## Uninstallation
 
 To completely uninstall the Auto Power Off module, an uninstallation script is now available:
