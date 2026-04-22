@@ -398,6 +398,60 @@ Si vous préférez désinstaller manuellement, voici les étapes à suivre :
    sudo systemctl restart moonraker
    ```
 
+## Utilisation avancée
+
+### Extinction optionnelle (ne pas éteindre après chaque impression)
+
+Par défaut, `AUTO_POWEROFF OPTION=START` dans `END_PRINT` entraîne l'extinction après **chaque** impression. Si vous lancez des impressions en série, vous préférerez probablement décider *avant* une impression si la machine doit s'éteindre après.
+
+Le modèle ci-dessous (contribution de la communauté — @thaala) utilise une simple variable booléenne :
+
+```gcode
+# Dans printer.cfg
+
+[gcode_macro POW_WANTED]
+description: Drapeau : éteindre après la prochaine impression
+variable_powwanted: 0
+gcode:
+  SET_GCODE_VARIABLE MACRO=POW_WANTED VARIABLE=powwanted VALUE=1
+
+[gcode_macro POW_UNWANTED]
+description: Effacer le drapeau et annuler le compte à rebours
+gcode:
+  SET_GCODE_VARIABLE MACRO=POW_WANTED VARIABLE=powwanted VALUE=0
+  AUTO_POWEROFF OPTION=CANCEL
+
+[gcode_macro POWEROFF_IF_WANTED]
+description: Démarre le timer uniquement si POW_WANTED a été activé
+gcode:
+  {% if printer["gcode_macro POW_WANTED"].powwanted > 0 %}
+    AUTO_POWEROFF OPTION=START
+  {% endif %}
+```
+
+À intégrer dans vos macros d'impression :
+
+```gcode
+[gcode_macro PRINT_START]
+gcode:
+  POW_UNWANTED          # toujours effacer le drapeau en début d'impression
+  # ... reste de votre routine de démarrage ...
+
+[gcode_macro END_PRINT]
+gcode:
+  # ... votre routine de fin existante ...
+  M104 S0
+  M140 S0
+  POWEROFF_IF_WANTED    # démarre le timer seulement si POW_WANTED a été appelé
+
+[gcode_macro CANCEL_PRINT]
+gcode:
+  # ... votre routine d'annulation existante ...
+  POW_UNWANTED          # annule l'extinction en cas d'annulation manuelle
+```
+
+Utilisation : avant de lancer la dernière impression de la session, exécutez `POW_WANTED` depuis la console Mainsail/Fluidd ou un bouton macro. Les autres impressions se terminent normalement sans extinction.
+
 ## Dépannage
 
 ### Problèmes courants et solutions

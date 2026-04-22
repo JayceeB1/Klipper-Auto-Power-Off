@@ -91,7 +91,7 @@ fi
 if [ -f "$MODULE_PATH" ]; then
     VERSION=$(grep -o "__version__ = \"[0-9.]*\"" "$MODULE_PATH" | cut -d'"' -f2)
 else
-    VERSION="2.1.0" # Default version if not found!
+    VERSION="2.1.1" # Default version if not found!
 fi
 
 # Colors for messages

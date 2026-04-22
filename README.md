@@ -399,6 +399,60 @@ If you prefer to uninstall manually, follow these steps:
    sudo systemctl restart moonraker
    ```
 
+## Advanced Usage
+
+### Opt-in Power-Off (don't auto-poweroff every print)
+
+By default, `AUTO_POWEROFF OPTION=START` inside `END_PRINT` causes the printer to power off after **every** print. If you run sequential prints you probably don't want that — you'd rather decide *before* a print whether the machine should shut down afterwards.
+
+The pattern below (contributed by community member @thaala) uses a single boolean variable to control this:
+
+```gcode
+# In printer.cfg
+
+[gcode_macro POW_WANTED]
+description: Flag: power off after the next print
+variable_powwanted: 0
+gcode:
+  SET_GCODE_VARIABLE MACRO=POW_WANTED VARIABLE=powwanted VALUE=1
+
+[gcode_macro POW_UNWANTED]
+description: Clear the flag and cancel any running countdown
+gcode:
+  SET_GCODE_VARIABLE MACRO=POW_WANTED VARIABLE=powwanted VALUE=0
+  AUTO_POWEROFF OPTION=CANCEL
+
+[gcode_macro POWEROFF_IF_WANTED]
+description: Start the auto-poweroff timer only if POW_WANTED was set
+gcode:
+  {% if printer["gcode_macro POW_WANTED"].powwanted > 0 %}
+    AUTO_POWEROFF OPTION=START
+  {% endif %}
+```
+
+Then wire it into your print macros:
+
+```gcode
+[gcode_macro PRINT_START]
+gcode:
+  POW_UNWANTED          # always clear the flag at print start
+  # ... rest of your start routine ...
+
+[gcode_macro END_PRINT]
+gcode:
+  # ... your existing end routine ...
+  M104 S0
+  M140 S0
+  POWEROFF_IF_WANTED    # only starts timer if you called POW_WANTED before this print
+
+[gcode_macro CANCEL_PRINT]
+gcode:
+  # ... your existing cancel routine ...
+  POW_UNWANTED          # cancel power-off on manual cancels too
+```
+
+Usage: before starting a print you want to be the last one, run `POW_WANTED` from the Mainsail/Fluidd console or a UI macro button. All other prints complete normally without powering off.
+
 ## Troubleshooting
 
 ### Common Problems and Solutions

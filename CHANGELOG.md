@@ -5,6 +5,11 @@ All notable changes to the Klipper Auto Power Off project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-04-22
+
+### Added
+* Advanced Usage section in README / README_FR: "Opt-in Power-Off" macro pattern (POW_WANTED / POW_UNWANTED / POWEROFF_IF_WANTED) contributed by community member @thaala — lets users decide per-print whether the machine should auto-poweroff, rather than shutting down after every print.
+
 ## [2.1.0] - 2026-04-21
 
 ### Fixed
