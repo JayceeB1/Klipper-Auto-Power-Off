@@ -83,6 +83,7 @@ validate_installation_mode() {
 
 # Determine script directory and version
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${SCRIPT_DIR}/moonraker_authorization.sh"
 if [ -z "$MODULE_PATH" ]; then
     MODULE_PATH="${HOME}/klipper/klippy/extras/auto_power_off.py"
 fi
@@ -132,6 +133,101 @@ print_error() {
     else
         echo -e "${RED}[ERROR]${NC} $1"
     fi
+}
+
+# Check the local Moonraker authorization required by the default integration.
+# A custom or remote URL is deliberately left untouched.
+ensure_local_moonraker_authorization() {
+    local moonraker_conf="$1"
+    local moonraker_url="$2"
+    local add_client
+
+    MOONRAKER_AUTHORIZATION_CHANGED=false
+
+    if ! moonraker_url_uses_default_localhost "$moonraker_url"; then
+        return 0
+    fi
+
+    if [ ! -f "$moonraker_conf" ]; then
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            print_warning "Impossible de vérifier l'autorisation Moonraker : fichier non trouvé à $moonraker_conf"
+        else
+            print_warning "Cannot verify Moonraker authorization: file not found at $moonraker_conf"
+        fi
+        return 0
+    fi
+
+    if moonraker_local_client_is_trusted "$moonraker_conf"; then
+        return 0
+    fi
+
+    if [ "$LANG_CHOICE" = "fr" ]; then
+        print_warning "Moonraker n'autorise pas explicitement le client local 127.0.0.1 requis par Auto Power Off."
+        echo "Ajout proposé dans [authorization] : trusted_clients -> 127.0.0.1"
+        read -p "Ajouter 127.0.0.1 à moonraker.conf ? [O/n] " add_client
+    else
+        print_warning "Moonraker does not explicitly trust the local 127.0.0.1 client required by Auto Power Off."
+        echo "Proposed addition under [authorization]: trusted_clients -> 127.0.0.1"
+        read -p "Add 127.0.0.1 to moonraker.conf? [Y/n] " add_client
+    fi
+
+    if [[ "$add_client" =~ ^[Nn] ]]; then
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            print_warning "moonraker.conf n'a pas été modifié. Ajoutez 127.0.0.1 sous [authorization] > trusted_clients avant d'utiliser l'intégration Moonraker."
+        else
+            print_warning "moonraker.conf was not modified. Add 127.0.0.1 under [authorization] > trusted_clients before using Moonraker integration."
+        fi
+        return 0
+    fi
+
+    if [ ! -f "${moonraker_conf}.bak" ]; then
+        cp "$moonraker_conf" "${moonraker_conf}.bak"
+    fi
+
+    if add_moonraker_local_client "$moonraker_conf"; then
+        MOONRAKER_AUTHORIZATION_CHANGED=true
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            print_success "127.0.0.1 a été ajouté aux clients Moonraker de confiance."
+        else
+            print_success "127.0.0.1 was added to Moonraker trusted clients."
+        fi
+    else
+        if [ "$LANG_CHOICE" = "fr" ]; then
+            print_error "Échec de la mise à jour de moonraker.conf. La sauvegarde est disponible dans ${moonraker_conf}.bak"
+        else
+            print_error "Failed to update moonraker.conf. A backup is available at ${moonraker_conf}.bak"
+        fi
+        return 1
+    fi
+}
+
+get_auto_power_off_moonraker_url() {
+    local config_file
+    local moonraker_url
+
+    for config_file in \
+        "$PRINTER_CONFIG_DIR/printer.cfg" \
+        "$PRINTER_CONFIG_DIR/auto_power_off.cfg" \
+        "$PRINTER_CONFIG_DIR/fluidd/auto_power_off.cfg" \
+        "$PRINTER_CONFIG_DIR/mainsail/auto_power_off.cfg"; do
+        [ -f "$config_file" ] || continue
+        moonraker_url="$(awk '
+            /^\[auto_power_off\][[:space:]]*$/ { in_section=1; next }
+            in_section && /^\[/ { exit }
+            in_section && /^[[:space:]]*moonraker_url:[[:space:]]*/ {
+                sub(/^[[:space:]]*moonraker_url:[[:space:]]*/, "")
+                sub(/[[:space:]]+#.*/, "")
+                print
+                exit
+            }
+        ' "$config_file")"
+        if [ -n "$moonraker_url" ]; then
+            echo "$moonraker_url"
+            return
+        fi
+    done
+
+    echo "http://127.0.0.1:7125"
 }
 
 # Repository information
@@ -946,7 +1042,7 @@ temp_threshold: 40    # Temperature threshold in °C (printer considered cool)
 power_device: psu_control  # Name of your power device (must match the [power] section)
 auto_poweroff_enabled: True  # Enable auto power off by default at startup
 moonraker_integration: True  # Enable Moonraker integration
-moonraker_url: http://localhost:7125  # Moonraker API URL (usually default)
+moonraker_url: http://127.0.0.1:7125  # Moonraker API URL (local default)
 language: auto        # Language setting: 'en', 'fr', or 'auto' for auto-detection
 diagnostic_mode: False # Enable detailed logging for troubleshooting power off issues
 EOL
@@ -985,6 +1081,8 @@ elif [ -t 0 ]; then
         fi
     fi
 
+    ensure_local_moonraker_authorization "$MOONRAKER_CONF" "$(get_auto_power_off_moonraker_url)"
+
     read -p "$MSG_ADD_MOONRAKER" ADD_MOONRAKER
 
     if [[ "$ADD_MOONRAKER" =~ ^[$MSG_YES_CONFIRM][eEyY]?[sS]?$ ]]; then
@@ -1022,6 +1120,8 @@ elif [ -t 0 ]; then
         print_success "$MSG_REPO_CREATED"
 
         add_update_manager_config "$MOONRAKER_CONF" "$REPO_PATH"
+        restart_moonraker
+    elif [ "$MOONRAKER_AUTHORIZATION_CHANGED" = true ]; then
         restart_moonraker
     fi
 fi
