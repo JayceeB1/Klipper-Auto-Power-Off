@@ -95,6 +95,22 @@ For a detailed list of changes between versions, please refer to the [CHANGELOG.
 
 4. Follow the on-screen instructions.
 
+### Moonraker Authorization
+
+For the default local Moonraker endpoint, the installer checks whether `127.0.0.1` is allowed in `[authorization]` → `trusted_clients`. If it is missing, the installer shows the proposed change, asks for confirmation, creates a `moonraker.conf.bak` backup, and restarts Moonraker after the change.
+
+If you decline, add the local client manually before using Moonraker integration:
+
+```ini
+# moonraker.conf
+[authorization]
+trusted_clients:
+  127.0.0.1
+  # Keep your existing trusted clients below
+```
+
+Custom or remote `moonraker_url` values are not modified automatically.
+
 ### Manual Installation
 
 1. Copy the `auto_power_off.py` script to your Klipper extras directory:
@@ -235,7 +251,7 @@ The following parameters can be configured in the `[auto_power_off]` section:
 | `auto_poweroff_enabled` | False | Enable auto power off by default at startup |
 | `language` | auto | Language for messages: 'en' for English, 'fr' for French, 'auto' for auto-detection |
 | `moonraker_integration` | True | Enable integration with Moonraker's power control |
-| `moonraker_url` | http://localhost:7125 | URL for Moonraker API |
+| `moonraker_url` | http://127.0.0.1:7125 | URL for Moonraker API |
 | `diagnostic_mode` | False | Enable detailed logging for troubleshooting power off issues |
 | `power_off_retries` | 3 | Number of retry attempts when using Moonraker API |
 | `power_off_retry_delay` | 2 | Delay in seconds between retry attempts |
@@ -269,7 +285,7 @@ idle_timeout: 600
 temp_threshold: 40
 auto_poweroff_enabled: True
 moonraker_integration: True
-moonraker_url: http://localhost:7125
+moonraker_url: http://127.0.0.1:7125
 ```
 
 > **Note:** The `[power]` section is a **Moonraker** configuration block (goes in `moonraker.conf`), not a Klipper block. Auto Power Off calls the Moonraker API to flip the switch when conditions are met.
@@ -517,6 +533,17 @@ If CURL is not installed, you can install it with:
 ```bash
 sudo apt-get install curl
 ```
+
+#### Moonraker returns `401 Unauthorized`
+
+When the module uses the default local endpoint, Moonraker must trust the local HTTP client. Confirm that `127.0.0.1` is listed under `[authorization]` → `trusted_clients` in `moonraker.conf`, then restart Moonraker:
+
+```bash
+sudo systemctl restart moonraker
+curl -sS -i -X POST "http://127.0.0.1:7125/machine/device_power/device?device=YOUR_POWER_DEVICE&action=off"
+```
+
+The installer offers to add this loopback address automatically. This requirement and the installer check were identified with help from [@0xevolix](https://github.com/0xevolix) in [issue #19](https://github.com/JayceeB1/Klipper-Auto-Power-Off/issues/19).
 
 #### Testing with Dry Run Mode
 
