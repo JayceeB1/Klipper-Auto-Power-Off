@@ -5,6 +5,16 @@ All notable changes to the Klipper Auto Power Off project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2026-08-08
+
+### Fixed
+* The interactive installer now detects when the default local Moonraker client (`127.0.0.1`) is missing from `[authorization]` → `trusted_clients`. It offers a confirmed, backed-up update and restarts Moonraker when the authorization configuration changes, preventing `401 Unauthorized` failures during power-off (issues #19 and #20).
+* The installer does not modify authorization settings for custom or remote Moonraker URLs.
+
+### Changed
+* The default Moonraker URL is now `http://127.0.0.1:7125`, avoiding localhost IPv4/IPv6 ambiguity.
+* English and French documentation now cover the Moonraker authorization prerequisite, manual recovery steps, and `401 Unauthorized` troubleshooting.
+
 ## [2.1.1] - 2026-04-22
 
 ### Added
